@@ -1,0 +1,90 @@
+ReuseBufferNotify hook is called whenever old buffer is reused in DRI2
+code.
+
+Driver can use this hook to rewrite the buffer name if hardware requires
+shared buffers. Shared buffer might be some hardware limited resources like
+framebuffer that is preallocated in boot.
+
+Signed-off-by: Pauli Nieminen <ext-pauli.nieminen at nokia.com>
+Reviewed-by: Jesse Barnes <jbarnes at virtuousgeek.org>
+---
+ hw/xfree86/dri2/dri2.c |    8 ++++++++
+ hw/xfree86/dri2/dri2.h |   16 +++++++++++++++-
+ 2 files changed, 23 insertions(+), 1 deletions(-)
+
+diff --git a/hw/xfree86/dri2/dri2.c b/hw/xfree86/dri2/dri2.c
+index 9379433..ecb4a4e 100644
+--- a/hw/xfree86/dri2/dri2.c
++++ b/hw/xfree86/dri2/dri2.c
+@@ -101,6 +101,7 @@ typedef struct _DRI2Screen {
+     DRI2GetMSCProcPtr		 GetMSC;
+     DRI2ScheduleWaitMSCProcPtr	 ScheduleWaitMSC;
+     DRI2AuthMagicProcPtr	 AuthMagic;
++    DRI2ReuseBufferNotifyProcPtr ReuseBufferNotify;
+ 
+     HandleExposuresProcPtr       HandleExposures;
+ 
+@@ -346,6 +347,10 @@ allocate_or_reuse_buffer(DrawablePtr pDraw, DRI2ScreenPtr ds,
+ 
+     } else {
+ 	*buffer = pPriv->buffers[old_buf];
++
++	if (ds->ReuseBufferNotify)
++		(*ds->ReuseBufferNotify)(pDraw, *buffer);
++
+ 	pPriv->buffers[old_buf] = NULL;
+ 	return FALSE;
+     }
+@@ -1106,6 +1111,9 @@ DRI2ScreenInit(ScreenPtr pScreen, DRI2InfoPtr info)
+         ds->AuthMagic = info->AuthMagic;
+     }
+ 
++    if (info->version >= 6)
++	ds->ReuseBufferNotify = info->ReuseBufferNotify;
++
+     /*
+      * if the driver doesn't provide an AuthMagic function or the info struct
+      * version is too low, it relies on the old method (using libdrm) or fail
+diff --git a/hw/xfree86/dri2/dri2.h b/hw/xfree86/dri2/dri2.h
+index fe0bf6c..531d801 100644
+--- a/hw/xfree86/dri2/dri2.h
++++ b/hw/xfree86/dri2/dri2.h
+@@ -110,6 +110,16 @@ typedef DRI2BufferPtr	(*DRI2CreateBufferProcPtr)(DrawablePtr pDraw,
+ typedef void		(*DRI2DestroyBufferProcPtr)(DrawablePtr pDraw,
+ 						    DRI2BufferPtr buffer);
+ /**
++ * Notifies driver when DRI2GetBuffers reuses a dri2 buffer.
++ *
++ * Driver may rename the dri2 buffer in this notify if it is required.
++ *
++ * \param pDraw drawable whose count we want
++ * \param buffer buffer that will be returned to client
++ */
++typedef void		(*DRI2ReuseBufferNotifyProcPtr)(DrawablePtr pDraw,
++						      DRI2BufferPtr buffer);
++/**
+  * Get current media stamp counter values
+  *
+  * This callback is used to support the SGI_video_sync and OML_sync_control
+@@ -161,7 +171,7 @@ typedef void		(*DRI2InvalidateProcPtr)(DrawablePtr pDraw,
+ /**
+  * Version of the DRI2InfoRec structure defined in this header
+  */
+-#define DRI2INFOREC_VERSION 5
++#define DRI2INFOREC_VERSION 6
+ 
+ typedef struct {
+     unsigned int version;	/**< Version of this struct */
+@@ -189,6 +199,10 @@ typedef struct {
+     /* added in version 5 */
+ 
+     DRI2AuthMagicProcPtr	AuthMagic;
++
++    /* added in version 6 */
++
++    DRI2ReuseBufferNotifyProcPtr ReuseBufferNotify;
+ }  DRI2InfoRec, *DRI2InfoPtr;
+ 
+ extern _X_EXPORT int DRI2EventBase;
+-- 
+1.7.0.4

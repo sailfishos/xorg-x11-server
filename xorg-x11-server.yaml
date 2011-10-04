@@ -1,0 +1,166 @@
+Name: xorg-x11-server
+Summary: X.Org X11 X server
+Version: 1.10.1
+Release: 1
+Group: System/X11
+License: MIT
+URL: http://www.x.org
+Sources:
+    - xorg-server-%{version}.tar.bz2
+Patches:
+    - xorg-x11-nonroot-vesa.patch
+    - xorg-detect-psb.patch
+    - use-sloppy-heuristic-first-for-initial-mode.patch
+    - do-not-zap-xserver.patch
+    - Lower-server-side-GLX-version.patch
+    - reuse-buffer-notify.patch
+    - Suppress-exposures-and-implicit-painting-for-some-re.patch
+
+Requires:
+    - libdrm >= 2.4.0
+PkgBR:
+    - byacc
+    - flex
+PkgConfigBR:
+    - xorg-macros
+    - scrnsaverproto
+    - xtrans
+    - libdrm
+    - randrproto
+    - renderproto
+    - kbproto
+    - glproto
+    - fixesproto
+    - dri2proto
+    - damageproto
+    - xf86driproto
+    - xcmiscproto
+    - bigreqsproto
+    - compositeproto
+    - resourceproto
+    - evieproto
+    - xf86dgaproto
+    - xf86vidmodeproto
+    - recordproto
+    - xkbfile
+    - xres
+    - xau
+    - xext
+    - xfont
+    - fontenc
+    - xdmcp
+    - xt
+    - dmx
+    - xmuu
+    - xrender
+    - xi
+    - xpm
+    - xaw7
+    - xfixes
+    - xv
+    - pixman-1
+    - gl
+    - dri
+    - x11
+    - openssl
+    - pciaccess
+    - libudev
+    - dbus-1
+    - fontutil
+    - xcomposite
+Configure: reconfigure
+ConfigOptions:
+    - --enable-maintainer-mode
+    - --enable-config-udev
+    - --disable-config-hal 
+    - --disable-xvfb
+    - --disable-xnest
+    - --disable-dmx
+    - --enable-kdrive
+    - --enable-xephyr
+    - --disable-xfake
+    - --disable-xfbdev
+    - --enable-xorg
+    - --with-pic
+    - --with-default-font-path="catalogue:/etc/X11/fontpath.d,built-ins"
+    - --with-module-dir=%{_libdir}/xorg/modules
+    - '--with-builderstring="Build ID: %{name} %{version}-%{release}"'
+    - --with-xkb-output=%{_localstatedir}/cache/xkb
+    - --disable-xselinux
+    - --disable-xinerama
+    - --enable-dri2
+    - --enable-dri
+    - --with-dri-driver-path=%{_libdir}/dri
+ExtraSources:
+    - 00-input-default.conf;/etc/X11/xorg.conf.d
+    - 10-input-synaptics.conf;/etc/X11/xorg.conf.d
+    - 11-input-joystick.conf;/etc/X11/xorg.conf.d
+Description: |
+    Description: %{summary}
+SubPackages:
+    - Name: devel
+      Summary: SDK for X server driver module development
+      Group: System/X11
+      Description: |
+          The SDK package provides the developmental files which are necessary for
+          developing X server driver modules, and for compiling driver modules
+          outside of the standard X11 source code tree.  Developers writing video
+          drivers, input drivers, or other X modules should install this package.
+      Requires:
+          - xorg-x11-util-macros
+          - pkgconfig
+          - pixman-devel
+          - libpciaccess-devel
+
+    - Name: common
+      Summary: Xorg server common files
+      Group: System/X11
+      Description: Common files shared among all X servers.
+
+    - Name: Xorg
+      Summary: Xorg X server
+      Group: System/X11
+      Description: |
+          X.org X11 is an open source implementation of the X Window System.  It
+          provides the basic low level functionality which full fledged
+          graphical user interfaces (GUIs) such as GNOME and KDE are designed
+          upon.
+      Requires:
+          - xorg-x11-drv-mouse
+          - xorg-x11-drv-keyboard
+          - xorg-x11-drv-evdev
+          - xkbdata
+          - xkbcomp
+          - xorg-x11-server-common >= %{version}-%{release}
+
+    - Name: Xorg-setuid
+      Summary: Xorg X server with setuid
+      Group: System/X11
+      Description: |
+          X.org X11 is an open source implementation of the X Window System.  It
+          provides the basic low level functionality which full fledged
+          graphical user interfaces (GUIs) such as GNOME and KDE are designed
+          upon.
+      Requires:
+          - xorg-x11-drv-mouse
+          - xorg-x11-drv-keyboard
+          - xorg-x11-drv-evdev
+          - xkbdata
+          - xkbcomp
+          - xorg-x11-server-common >= %{version}-%{release}
+      Provides:
+          - xorg-x11-server-Xorg = %{version}
+
+    - Name: Xephyr
+      Summary: A nested X server.
+      Group: System/X11
+      Description: |
+          Xephyr is an X server, which has been implemented as an ordinary
+          X application.  It runs in a window just like other X applications,
+          but it is an X server itself in which you can run other software.  It
+          is a very useful tool for developers who wish to test their
+          applications without running them on their real X server.  Unlike
+          Xnest, Xephyr renders to an X image rather than relaying the
+          X protocol, and therefore supports the newer X extensions like
+          Render and Composite.
+

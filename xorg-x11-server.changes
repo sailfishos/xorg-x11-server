@@ -1,0 +1,327 @@
+* Tue May 03 2011 Li Peng <peng.li@intel.com> - 1.10.1
+- xserver 1.10.1
+
+* Mon Mar 28 2011 Marko Saukko <marko.saukko@cybercom.com> - 1.9.0
+- Added handle-device-change-event-properly.patch upstream patch to fix BMC#14201
+
+* Mon Mar 28 2011 Li Peng <peng.li@intel.com> - 1.9.0
+- Fix the error in patch porting 
+  Suppress-exposures-and-implicit-painting-for-some-re.patch
+  (BMC #14890)
+
+* Thu Mar 24 2011 Li Peng <peng.li@intel.com> - 1.9.0
+- Fix the flickering issue when mcompositor flips the compsiting on and off
+
+* Wed Mar 09 2011 Li Peng <peng.li@intel.com> - 1.9.0
+- Fix BMC #9642 (HPET reading overhead is not trivial inside Xorg)
+
+* Tue Feb 22 2011 Li Peng <peng.li@intel.com> - 1.9.0
+- BMC #13727 (fix potential out of memory failure in xserver)
+
+* Thu Feb 17 2011 Markus Lehtonen <markus.lehtonen@nokia.com> - 1.9.0
+- Remove old bg-none-root patch and replace with current upstream patches
+  (BMC#13635)
+- Add reuse buffer notify patch (BMC#13635)
+
+* Thu Jan 06 2011 Li Peng <peng.li@intel.com> - 1.9.0
+- Fix BMC #11975 (Xorg crashes occasionally on DDX drivers that implements
+  schedule swap without GetMSC)
+
+* Wed Dec 15 2010 Yan Yin <yan.yin@intel.com> - 1.9.0
+- Fix missing 11-input-joystick.conf in xorg-x11-server-Xorg subpackage(FEA #7828)
+
+* Fri Nov 26 2010 Yan Yin <yan.yin@intel.com> - 1.9.0
+- Add 11-input-joystick.conf to support joystick in MeeGo(FEA# 7828)
+
+* Mon Nov 01 2010 Liu Xinyun <xinyun.liu@intel.com> - 1.9.0
+- Rework fix-vbe-memory-access-violation.patch.
+- Pick 853d7e, vbe: Fix copying the mode info block
+
+* Sat Sep 26 2010 Feng Haitao <haitao.feng@intel.com> - 1.9.0
+- Add 0001-Enable-DRI2-extension-for-Xephyr.patch
+- Add 0002-Enable-off-screen-rendering-feature-for-Xephyr.patch
+- Add 0003-Enable-notfp-feature-for-Xephyr.patch
+- Fix BMC #7397 (Xephyr with GL acceleration could be provided from
+  xorg-x11-server package)
+
+* Sat Sep 25 2010 Li Peng <peng.li@intel.com> - 1.9.0
+- Fix BMC #1760 (messed screen if doing rotation on handset)
+
+* Tue Sep 21 2010 Li Peng <peng.li@intel.com> - 1.9.0
+- Fix BMC #7063 (very sensitive touchpad on asus netbook)
+
+* Tue Sep 07 2010 Liu Xinyun <xinyun.liu@intel.com> - 1.9.0
+- Add fix-vbe-memory-access-violation.patch.
+- Fix BMC #5804, it is to fix a MeeGo-SDK block issue.
+
+* Mon Aug 23 2010 Li Peng <peng.li@intel.com> - 1.9.0
+- xserver 1.9.0
+
+* Thu Aug 12 2010 Li Peng <peng.li@intel.com> - 1.8.99.905
+- Add pci id for Medfield
+
+* Mon Jul 26 2010 Li Peng <peng.li@intel.com> - 1.8.99.905
+- Fix BMC #3982 (keyboard & mouse not work on handset device),
+  by adding input driver conf files to /etc/X11/xorg.conf.d
+
+* Tue Jul 20 2010 Li Peng <peng.li@intel.com> - 1.8.99.905
+- drop downgrade-dri2-info-version.patch, which was integrated in last
+  request by mistake, it is only for testing and shouldn't be integrated
+
+* Tue Jul 20 2010 Li Peng <peng.li@intel.com> - 1.8.99.905
+- xserver 1.8.99.905 (1.9 RC5)
+
+* Tue Jul 20 2010 Liu Xinyun <xinyun.liu@intel.com> - 1.8.99.903
+- Fix BMC #3797. Cache XKB comipled file to a proper place.
+
+* Thu Jul 08 2010 Liu Xinyun <xinyun.liu@intel.com> - 1.8.99.903
+- Fix BMC #1384. Lower Server side GLX version for S/W rendering.
+
+* Thu Jul 08 2010 Liu Xinyun <xinyun.liu@intel.com> - 1.8.99.903
+- Rework cache-xkbcomp-output-for-fast-start-up.patch
+
+* Fri Jun 25 2010 Li Peng <peng.li@intel.com> - 1.8.99.903
+- xserver 1.8.99.903 (1.9 RC3)
+
+* Thu Jun 24 2010 Li Peng <peng.li@intel.com> - 1.8.1.902
+- remove dependency of xorg-x11-drv-void
+
+* Wed Jun 23 2010 Li Peng <peng.li@intel.com> - 1.8.1.902
+- xserver 1.8.1.902
+
+* Wed Apr 21 2010 Li Peng <peng.li@intel.com> - 1.8.0
+- Patches from upstream for X crash issue with GLX1.3 (BMC#1106)
+
+* Mon Apr 19 2010 Li Peng <peng.li@intel.com> - 1.8.0
+- Revoke xserver-dri2-drawable-destroy-fix.patch, which causes
+  memleak in gfx perf test (BMC#761)
+- Revoke the use of "obsolete" in xorg-x11-server-Xorg-setuid, which 
+  leads to setuid xserver overwrite non-setuid xserver in yum update
+
+* Wed Apr 14 2010 Li Peng <peng.li@intel.com> - 1.8.0
+- update Add-inputclass-section-into-builtin-config.patch to 
+  reflect Yan's fix and use it for input driver config.
+- obsolete xorg-x11-server-Xorg with xorg-x11-server-Xorg-setuid
+
+* Mon Apr 12 2010 Yan Li <yan.i.li@intel.com> - 1.8.0
+- Fixed the wrong order of input driver configuration. The default 
+  InputClass that uses evdev driver should be the first one. Fix touchpad
+  sensitive issue on some netbooks (BMC#642)
+
+* Thu Apr 08 2010 Arjan van de Ven <arjan@linux.intel.com> - 1.8.0
+- prevent double installation for setuid installs by adding a Provides:
+
+* Tue Apr 06 2010 Li Peng <peng.li@intel.com> - 1.8.0
+- xserver 1.8.0; disable dmx config option; fix MeeGo Bug #76 
+  (X crash while clicking Toolbar icon)
+
+* Mon Apr 05 2010 Arjan van de Ven <arjan@linux.intel.com> - 1.7.99.902~somegit
+- fix the touchpad-goes-to-fast thing again
+
+* Thu Apr 01 2010 Li Peng <peng.li@intel.com> - 1.7.99.902~git57cb1a854a
+- make xserver autodetect the pvr driver 
+
+* Wed Mar 31 2010 Li Peng <peng.li@intel.com> - 1.7.99.902~git57cb1a854a
+- update xserver to git master 57cb1a854a
+
+* Tue Mar 23 2010 Li Peng <peng.li@intel.com> - 1.7.99.902~git3083c5d0c4
+- update to xserver 1.7.99.902~git3083c5d0c4
+
+* Thu Mar 18 2010 Li Peng <peng.li@intel.com> - 1.7.99.901
+- drop xserver-no-root-2.patch, because driver supporting KMS 
+  doesn't need xserver enable IO port to access H/W
+
+* Mon Mar 15 2010 Li Peng <peng.li@intel.com> - 1.7.99.901
+- update to lastest xserver 1.8, git commit 67a8c659f2
+
+* Wed Mar 10 2010 Yan Li <yan.i.li@intel.com> - 1.7.99.3
+- cache-xkbcomp-output-for-fast-start-up.patch rebased to current X
+
+* Tue Mar 09 2010 Li Peng <peng.li@intel.com> - 1.7.99.3
+- Add "inputclass" section into xserver builtin config
+
+* Fri Mar 05 2010 Anas Nashif <anas.nashif@intel.com> - 1.7.99.3
+- Keep static libs
+
+* Tue Feb 09 2010 Li Peng <peng.li@intel.com> - 1.7.99.3
+- upgrade to latest xserver 1.8
+
+* Tue Jan 26 2010 Auke Kok <auke-jan.h.kok@intel.com> - 1.7.3
+- Fix timestamp format in logging
+- Don't display timestamps in the middle of log lines
+
+* Thu Jan 07 2010 Li Peng <peng.li@intel.com> - 1.7.3
+- Add one non-root X patch
+
+* Thu Dec 24 2009 Li Peng <peng.li@intel.com> - 1.7.3
+- update cache-xkbcomp-output-for-fast-start-up.patch
+
+* Fri Dec 11 2009 Li Peng <peng.li@intel.com> - 1.7.3
+- xserver 1.7.3
+
+* Mon Nov 23 2009 Li Peng <peng.li@intel.com> - 1.7.1.902
+- xserver 1.7.1.902
+- Migrate from HAL to udev
+
+* Wed Oct 28 2009 Li Peng <peng.li@intel.com> - 1.7.1
+- xserver 1.7.1
+
+* Sat Oct 10 2009 Li Peng <peng.li@intel.com> 1.6.4.901
+- 1.6.4.901
+
+* Wed Aug 26 2009 Li Peng <peng.li@intel.com> 1.6.3.901
+- 1.6.3.901 and update NRX patch
+
+* Tue Aug 25 2009 Li Peng <peng.li@intel.com> 1.6.3
+- Don't zap xserver for Ctrl-Alt-Backspace, fix #5614
+
+* Fri Aug 21 2009 Li Peng <peng.li@intel.com> 1.6.3
+- Update dri2-swapbuffers patch, fix #5173
+  (The netbook hangs after reboot if we connect to LCD)
+
+* Fri Aug 07 2009 Priya Vijayan <priya.vijayan@intel.com> 1.6.3
+- Update to X-server 1.6.3 release
+
+* Mon Aug 03 2009 Li Peng <peng.li@intel.com> 1.6.2.901
+- dri2-swapbuffers support
+
+* Thu Jul 30 2009 Li Peng <peng.li@intel.com> 1.6.2.901
+- xserver 1.6.2.901 (1.6.3 RC1)
+
+* Wed Jul 22 2009 Li Peng <peng.li@intel.com> 1.6.1.902
+- Add subpackage xorg-x11-server-Xorg-setuid, which ship 
+  Xorg with setuid bit
+  
+* Mon Jul 13 2009 Li Peng <peng.li@intel.com> 1.6.1.902
+- Non-Root-X fix, unset suid bit for Xorg
+- Try sloppy heuristic method for initial mode
+
+* Fri Jul 10 2009 Li Peng <peng.li@intel.com> 1.6.1.902
+- xserver 1.6.1.902
+
+* Wed Jul 08 2009 Arjan van de Ven <arjan@linux.itnel.com> 1.6.1.901
+- reinstate xserver-boottime patch to measure X timing
+
+* Fri Jul 03 2009 Arjan van de Ven <arjan@linux.intel.com> 1.6.1.901
+- don't fall back to vesa for the uid != 0 case
+
+* Thu Jul 02 2009 Li Peng <peng.li@intel.com> 1.6.1.901
+- add support-glXWaitGL-glXWaitX.patch and one missed patch
+  randr-fix-operation-order-so-that-rotation-transfor.patch
+
+* Wed Jul 01 2009 Arjan van de Ven <arjan@linux.intel.com> 1.6.1.901
+- add the non-root-X patches
+
+* Wed Jun 24 2009 Li Peng <peng.li@intel.com> 1.6.1.901
+- 1.6.1.901 and incremental patches in 1.6 branch
+
+* Sun May 31 2009 Li Peng <peng.li@intel.com> 1.6.1
+- update bg-none-root patch, fix moblin bug #1232
+
+* Tue May 12 2009 Yan Li <yan.i.li@intel.com> 1.6.1
+- update cache-xkbcomp-output-for-fast-start-up.patch to v5 for 1.6.1
+  to fix Moblin bug 1068
+
+* Fri Apr 24 2009 Li Peng <peng.li@intel.com> 1.6.1
+- Add security patches for xserver 1.6 branch
+
+* Fri Apr 24 2009 Yan Li <yan.i.li@intel.com> 1.6.1
+- Add BuildRequires libtool needed by autogen.sh
+
+* Thu Apr 16 2009 Anas Nashif <anas.nashif@intel.com> 1.6.1
+- Detect PSB on MRST CDK
+
+* Thu Apr 16 2009 Li Peng <peng.li@intel.com> 1.6.1
+- Update to 1.6.1
+
+* Tue Apr 14 2009 Li Peng <peng.li@intel.com> 1.6.0
+- Update patch to a full fix for fd.o #20704
+
+* Tue Apr 07 2009 Li Peng <peng.li@intel.com> 1.6.0
+- Add patch for fd.o #20704 (Keep resizing glxgears window with compiz
+  will make X hang)
+
+* Thu Mar 26 2009 Arjan van de Ven <arjan@linux.intel.com> 1.6.0
+- Autodetect the psb driver
+
+* Wed Mar 25 2009 Yan Li <yan.i.li@intel.com> 1.6.0
+- use a better patch to cache xkbcomp result, fixing Moblin bug #1067
+  and some other keymap-related problems. now xkbcomp outputs will be
+  cached in files with hashed keymap as names.
+
+* Thu Feb 26 2009 Yan Li <yan.i.li@intel.com> 1.6.0
+- update to upstream version 1.6.0
+- add one missing file `xorg-x11-server.files' for spec-builder
+
+* Sun Feb 22 2009 Arjan van de Ven <arjan@linux.intel.com> 1.5.99.903
+- borrow the patch from fedora to leave screan content in place at startup
+
+* Fri Feb 20 2009 Arjan van de Ven <arjan@linux.intel.com> 1.5.99.903
+- update to version 1.5.99.903
+- use specbuilder
+
+* Thu Jan 22 2009 Yan Li <yan.i.li@intel.com> 1.5.99.3
+- use a better patch (adding a retry timer for hal connection) from
+  upstream to fix Moblin Bug #386, save around 150ms of boot time
+
+* Wed Jan 21 2009 Yan Li <yan.i.li@intel.com> 1.5.99.3
+- add patch wait-for-hald-during-init.patch to fix Moblin Bug #386
+
+* Tue Jan 20 2009 Peng Li <peng.li@intel.com> 1.5.99.3
+- enable xfree86 video mode extension
+
+* Fri Jan 16 2009 Peng Li <peng.li@intel.com> 1.5.99.3
+- add xkb patches "xkb-Allow-NULL-as-rulesFile-in-XkbSetRulesDflts.patch"
+  and "xkbcomp.patch" to reduce xserver boot time
+
+* Mon Jan 05 2009 Yan Li <yan.i.li@intel.com> 1.5.99.3
+- remove workaround "disable_allowEmptyInput_autoAddDevices.patch",
+  add "Let-the-DDX-decide-on-the-XkbRulesDefaults.patch" to fix Moblin
+  bug #313, FD.o bug #19395
+
+* Sun Jan 04 2009 Peng Li <peng.li@intel.com> 1.5.99.3
+- add disable_allowEmptyInput_autoAddDevices.patch, workaround
+  for the problem of arrow keys doesn't work
+
+* Tue Dec 23 2008 Peng Li <peng.li@intel.com> 1.5.99.3
+- cleanup spec file, remove obsolete config options
+
+* Mon Dec 22 2008 Peng Li <peng.li@intel.com> 1.5.99.3
+- update to 1.5.99.3
+
+* Sat Dec 20 2008 Arjan van de Ven <arjan@linux.intel.com> 1.5.3
+- Remove stale requires on xorg-x11-proto-devel
+
+* Fri Dec 19 2008 Arjan van de Ven <arjan@linux.intel.com> 1.5.3
+- Fix crash at startup when passed -version
+
+* Thu Dec 18 2008 Arjan van de Ven <arjan@linux.intel.com> 1.5.3
+- Don't require xorg-x11-proto-devel; pkgconfig takes care of this
+
+* Thu Dec 04 2008 Peng Li <peng.li@intel.com> 1.5.3
+- add "libdri_noPanoramiXExtension_symbol.patch" for --disable-xinerama
+
+* Thu Dec 04 2008 Peng Li <peng.li@intel.com> 1.5.3
+- move to stable release 1.5.3
+
+* Thu Sep 18 2008 Peng Li <peng.li@intel.com> 1.5.99.1
+- xorg server 1.5.99.1
+
+* Wed Sep 10 2008 Peng Li <peng.li@intel.com> 1.4.99.905
+- update on xserver boottime patch and spec to disable Xnest,
+  Xvfb and Xephyr
+
+* Mon Sep 08 2008 Peng Li <peng.li@intel.com> 1.4.99.905
+- add x boot time patch
+
+* Fri Sep 05 2008 Peng Li <peng.li@intel.com> 1.4.99.905
+- remove package Xdmx and dependency on libdmx
+
+* Tue Sep 02 2008 Anas Nashif <anas.nashif@intel.com> 
+- fixed code to apply patches. spec files are located somewhere elese in obs
+
+* Sun Aug 24 2008 Peng Li <peng.li@intel.com> 1.4.99.905
+- remove vesa driver dependency
+
+* Wed Aug 13 2008 Peng Li <peng.li@intel.com>
+- add %doc for manpage files

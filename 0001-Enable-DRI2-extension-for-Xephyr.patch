@@ -1,0 +1,2390 @@
+Subject: [PATCH 1/3] Enable DRI2 extension for Xephyr
+
+Signed-off-by: Haitao Feng <haitao.feng@intel.com>
+---
+ hw/kdrive/ephyr/Makefile.am    |   44 ++-
+ hw/kdrive/ephyr/dri2.c         |  398 +++++++++++++
+ hw/kdrive/ephyr/dri2.h         |   88 +++
+ hw/kdrive/ephyr/ephyr.c        |   73 ++-
+ hw/kdrive/ephyr/ephyrdri2.c    |  118 ++++
+ hw/kdrive/ephyr/ephyrdri2.h    |   69 +++
+ hw/kdrive/ephyr/ephyrdri2ext.c | 1212 ++++++++++++++++++++++++++++++++++++++++
+ hw/kdrive/ephyr/ephyrdri2ext.h |   43 ++
+ hw/kdrive/ephyr/ephyrglxext.c  |    4 +
+ hw/kdrive/ephyr/ephyrinit.c    |   16 +-
+ hw/kdrive/ephyr/hostx.c        |   42 ++-
+ hw/kdrive/ephyr/hostx.h        |   12 +-
+ 12 files changed, 2090 insertions(+), 29 deletions(-)
+ create mode 100644 hw/kdrive/ephyr/dri2.c
+ create mode 100644 hw/kdrive/ephyr/dri2.h
+ create mode 100644 hw/kdrive/ephyr/ephyrdri2.c
+ create mode 100644 hw/kdrive/ephyr/ephyrdri2.h
+ create mode 100644 hw/kdrive/ephyr/ephyrdri2ext.c
+ create mode 100644 hw/kdrive/ephyr/ephyrdri2ext.h
+
+diff --git a/hw/kdrive/ephyr/Makefile.am b/hw/kdrive/ephyr/Makefile.am
+index 8646703..23ac11b 100644
+--- a/hw/kdrive/ephyr/Makefile.am
++++ b/hw/kdrive/ephyr/Makefile.am
+@@ -15,7 +15,19 @@ if DRI
+ LIBXEPHYR_HOSTDRI=libxephyr-hostdri.la
+ endif
+ 
+-noinst_LTLIBRARIES = libxephyr-hostx.la $(LIBXEPHYR_HOSTXV) $(LIBXEPHYR_HOSTDRI) libxephyr.la
++if DRI2
++LIBXEPHYR_HOSTDRI2=libxephyr-hostdri2.la
++endif
++
++if DRI
++LIBXEPHYR_HOSTGLX=libxephyr-hostglx.la
++else
++if DRI2
++LIBXEPHYR_HOSTGLX=libxephyr-hostglx.la
++endif
++endif
++
++noinst_LTLIBRARIES = libxephyr-hostx.la $(LIBXEPHYR_HOSTXV) $(LIBXEPHYR_HOSTDRI) $(LIBXEPHYR_HOSTDRI2) $(LIBXEPHYR_HOSTGLX) libxephyr.la
+ 
+ bin_PROGRAMS = Xephyr
+ 
+@@ -34,7 +46,17 @@ HOSTDRI_SRCS =			\
+ 	ephyrdri.c		\
+ 	ephyrdri.h		\
+ 	XF86dri.c		\
+-	xf86dri.h		\
++	xf86dri.h
++
++HOSTDRI2_SRCS =			\
++	ephyrdri2ext.c		\
++	ephyrdri2ext.h		\
++	ephyrdri2.c		\
++	ephyrdri2.h		\
++	dri2.c			\
++	dri2.h
++
++HOSTGLX_SRCS = 			\
+ 	ephyrglxext.c		\
+ 	ephyrglxext.h		\
+ 	ephyrhostglx.c		\
+@@ -57,6 +79,18 @@ if DRI
+ libxephyr_hostdri_la_SOURCES = $(HOSTDRI_SRCS)
+ endif
+ 
++if DRI2
++libxephyr_hostdri2_la_SOURCES = $(HOSTDRI2_SRCS)
++endif
++
++if DRI
++libxephyr_hostglx_la_SOURCES = $(HOSTGLX_SRCS)
++else
++if DRI2
++libxephyr_hostglx_la_SOURCES = $(HOSTGLX_SRCS)
++endif
++endif
++
+ libxephyr_la_SOURCES = $(XEPHYR_SRCS)
+ 
+ Xephyr_SOURCES = \
+@@ -67,6 +101,8 @@ Xephyr_LDADD = 						\
+ 	libxephyr-hostx.la				\
+ 	$(LIBXEPHYR_HOSTXV)				\
+ 	$(LIBXEPHYR_HOSTDRI)				\
++	$(LIBXEPHYR_HOSTDRI2)				\
++	$(LIBXEPHYR_HOSTGLX)				\
+ 	$(top_builddir)/exa/libexa.la			\
+ 	@KDRIVE_LIBS@					\
+ 	@XEPHYR_LIBS@
+@@ -76,6 +112,8 @@ Xephyr_DEPENDENCIES =	\
+ 	libxephyr-hostx.la				\
+ 	$(LIBXEPHYR_HOSTXV)				\
+ 	$(LIBXEPHYR_HOSTDRI)				\
++	$(LIBXEPHYR_HOSTDRI2)				\
++	$(LIBXEPHYR_HOSTGLX)				\
+ 	@KDRIVE_LOCAL_LIBS@
+ 
+ Xephyr_LDFLAGS = $(LD_EXPORT_SYMBOLS_FLAG)
+@@ -99,4 +137,6 @@ CLEANFILES = $(appman_DATA) Xephyr.man
+ EXTRA_DIST = \
+ 	$(HOSTVIDEO_SRCS) \
+ 	$(HOSTDRI_SRCS) \
++	$(HOSTDRI2_SRCS) \
++	$(HOSTGLX_SRCS) \
+ 	$(MAN_SRCS)
+diff --git a/hw/kdrive/ephyr/dri2.c b/hw/kdrive/ephyr/dri2.c
+new file mode 100644
+index 0000000..df6f69c
+--- /dev/null
++++ b/hw/kdrive/ephyr/dri2.c
+@@ -0,0 +1,398 @@
++/*
++ * Copyright © 2008 Red Hat, Inc.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Soft-
++ * ware"), to deal in the Software without restriction, including without
++ * limitation the rights to use, copy, modify, merge, publish, distribute,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, provided that the above copyright
++ * notice(s) and this permission notice appear in all copies of the Soft-
++ * ware and that both the above copyright notice(s) and this permission
++ * notice appear in supporting documentation.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
++ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABIL-
++ * ITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY
++ * RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN
++ * THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSE-
++ * QUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
++ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
++ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFOR-
++ * MANCE OF THIS SOFTWARE.
++ *
++ * Except as contained in this notice, the name of a copyright holder shall
++ * not be used in advertising or otherwise to promote the sale, use or
++ * other dealings in this Software without prior written authorization of
++ * the copyright holder.
++ *
++ * Authors:
++ *   Kristian Høgsberg (krh@redhat.com)
++ */
++
++/* 
++ * Copied from Mesa source codes
++ */
++
++#define NEED_REPLIES
++#include <stdio.h>
++#include <X11/Xlibint.h>
++#include <X11/extensions/Xext.h>
++#include <X11/extensions/extutil.h>
++#include <X11/extensions/dri2proto.h>
++#include "xf86drm.h"
++#include "dri2.h"
++
++/* Allow the build to work with an older versions of dri2proto.h and
++ * dri2tokens.h.
++ */
++#if DRI2_MINOR < 1
++#undef DRI2_MINOR
++#define DRI2_MINOR 1
++#define X_DRI2GetBuffersWithFormat 7
++#endif
++
++
++static char dri2ExtensionName[] = DRI2_NAME;
++static XExtensionInfo *dri2Info;
++static XEXT_GENERATE_CLOSE_DISPLAY (DRI2CloseDisplay, dri2Info)
++
++static /* const */ XExtensionHooks dri2ExtensionHooks = {
++    NULL,                   /* create_gc */
++    NULL,                   /* copy_gc */
++    NULL,                   /* flush_gc */
++    NULL,                   /* free_gc */
++    NULL,                   /* create_font */
++    NULL,                   /* free_font */
++    DRI2CloseDisplay,       /* close_display */
++    NULL,                   /* wire_to_event */
++    NULL,                   /* event_to_wire */
++    NULL,                   /* error */
++    NULL,                   /* error_string */
++};
++
++static XEXT_GENERATE_FIND_DISPLAY (DRI2FindDisplay,
++                                   dri2Info,
++                                   dri2ExtensionName,
++                                   &dri2ExtensionHooks,
++                                   0, NULL)
++
++Bool
++DRI2QueryExtension(Display * dpy, int *eventBase, int *errorBase)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++
++   if (XextHasExtension(info)) {
++      *eventBase = info->codes->first_event;
++      *errorBase = info->codes->first_error;
++      return True;
++   }
++
++   return False;
++}
++
++Bool
++DRI2QueryVersion(Display * dpy, int *major, int *minor)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2QueryVersionReply rep;
++   xDRI2QueryVersionReq *req;
++   int nevents;
++
++   XextCheckExtension(dpy, info, dri2ExtensionName, False);
++
++   LockDisplay(dpy);
++   GetReq(DRI2QueryVersion, req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2QueryVersion;
++   req->majorVersion = DRI2_MAJOR;
++   req->minorVersion = DRI2_MINOR;
++   if (!_XReply(dpy, (xReply *) & rep, 0, xFalse)) {
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return False;
++   }
++   *major = rep.majorVersion;
++   *minor = rep.minorVersion;
++   UnlockDisplay(dpy);
++   SyncHandle();
++
++   switch (rep.minorVersion) {
++   case 1:
++       nevents = 0;
++       break;
++   case 2:
++       nevents = 1;
++       break;
++   case 3:
++   default:
++       nevents = 2;
++       break;
++   }
++
++   return True;
++}
++
++Bool
++DRI2Connect(Display * dpy, XID window, char **driverName, char **deviceName)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2ConnectReply rep;
++   xDRI2ConnectReq *req;
++
++   XextCheckExtension(dpy, info, dri2ExtensionName, False);
++
++   LockDisplay(dpy);
++   GetReq(DRI2Connect, req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2Connect;
++   req->window = window;
++   req->driverType = DRI2DriverDRI;
++   if (!_XReply(dpy, (xReply *) & rep, 0, xFalse)) {
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return False;
++   }
++
++   if (rep.driverNameLength == 0 && rep.deviceNameLength == 0) {
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return False;
++   }
++
++   *driverName = Xmalloc(rep.driverNameLength + 1);
++   if (*driverName == NULL) {
++      _XEatData(dpy,
++                ((rep.driverNameLength + 3) & ~3) +
++                ((rep.deviceNameLength + 3) & ~3));
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return False;
++   }
++   _XReadPad(dpy, *driverName, rep.driverNameLength);
++   (*driverName)[rep.driverNameLength] = '\0';
++
++   *deviceName = Xmalloc(rep.deviceNameLength + 1);
++   if (*deviceName == NULL) {
++      Xfree(*driverName);
++      _XEatData(dpy, ((rep.deviceNameLength + 3) & ~3));
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return False;
++   }
++   _XReadPad(dpy, *deviceName, rep.deviceNameLength);
++   (*deviceName)[rep.deviceNameLength] = '\0';
++
++   UnlockDisplay(dpy);
++   SyncHandle();
++
++   return True;
++}
++
++Bool
++DRI2Authenticate(Display * dpy, XID window, drm_magic_t magic)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2AuthenticateReq *req;
++   xDRI2AuthenticateReply rep;
++
++   XextCheckExtension(dpy, info, dri2ExtensionName, False);
++
++   LockDisplay(dpy);
++   GetReq(DRI2Authenticate, req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2Authenticate;
++   req->window = window;
++   req->magic = magic;
++
++   if (!_XReply(dpy, (xReply *) & rep, 0, xFalse)) {
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return False;
++   }
++
++   UnlockDisplay(dpy);
++   SyncHandle();
++
++   return rep.authenticated;
++}
++
++void
++DRI2CreateDrawable(Display * dpy, XID drawable)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2CreateDrawableReq *req;
++
++   XextSimpleCheckExtension(dpy, info, dri2ExtensionName);
++
++   LockDisplay(dpy);
++   GetReq(DRI2CreateDrawable, req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2CreateDrawable;
++   req->drawable = drawable;
++   UnlockDisplay(dpy);
++   SyncHandle();
++}
++
++void
++DRI2DestroyDrawable(Display * dpy, XID drawable)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2DestroyDrawableReq *req;
++
++   XextSimpleCheckExtension(dpy, info, dri2ExtensionName);
++
++   XSync(dpy, False);
++
++   LockDisplay(dpy);
++   GetReq(DRI2DestroyDrawable, req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2DestroyDrawable;
++   req->drawable = drawable;
++   UnlockDisplay(dpy);
++   SyncHandle();
++}
++
++DRI2Buffer *
++DRI2GetBuffers(Display * dpy, XID drawable,
++               int *width, int *height,
++               unsigned int *attachments, int count, int *outCount)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2GetBuffersReply rep;
++   xDRI2GetBuffersReq *req;
++   DRI2Buffer *buffers;
++   xDRI2Buffer repBuffer;
++   CARD32 *p;
++   int i;
++
++   XextCheckExtension(dpy, info, dri2ExtensionName, False);
++
++   LockDisplay(dpy);
++   GetReqExtra(DRI2GetBuffers, count * 4, req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2GetBuffers;
++   req->drawable = drawable;
++   req->count = count;
++   p = (CARD32 *) & req[1];
++   for (i = 0; i < count; i++)
++      p[i] = attachments[i];
++
++   if (!_XReply(dpy, (xReply *) & rep, 0, xFalse)) {
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return NULL;
++   }
++
++   *width = rep.width;
++   *height = rep.height;
++   *outCount = rep.count;
++
++   buffers = Xmalloc(rep.count * sizeof buffers[0]);
++   if (buffers == NULL) {
++      _XEatData(dpy, rep.count * sizeof repBuffer);
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return NULL;
++   }
++
++   for (i = 0; i < rep.count; i++) {
++      _XReadPad(dpy, (char *) &repBuffer, sizeof repBuffer);
++      buffers[i].attachment = repBuffer.attachment;
++      buffers[i].name = repBuffer.name;
++      buffers[i].pitch = repBuffer.pitch;
++      buffers[i].cpp = repBuffer.cpp;
++      buffers[i].flags = repBuffer.flags;
++   }
++
++   UnlockDisplay(dpy);
++   SyncHandle();
++
++   return buffers;
++}
++
++
++DRI2Buffer *
++DRI2GetBuffersWithFormat(Display * dpy, XID drawable,
++                         int *width, int *height,
++                         unsigned int *attachments, int count, int *outCount)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2GetBuffersReply rep;
++   xDRI2GetBuffersReq *req;
++   DRI2Buffer *buffers;
++   xDRI2Buffer repBuffer;
++   CARD32 *p;
++   int i;
++
++   XextCheckExtension(dpy, info, dri2ExtensionName, False);
++
++   LockDisplay(dpy);
++   GetReqExtra(DRI2GetBuffers, count * (4 * 2), req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2GetBuffersWithFormat;
++   req->drawable = drawable;
++   req->count = count;
++   p = (CARD32 *) & req[1];
++   for (i = 0; i < (count * 2); i++)
++      p[i] = attachments[i];
++
++   if (!_XReply(dpy, (xReply *) & rep, 0, xFalse)) {
++      fprintf(stderr, "GetBuffersWithFormat fails\n");
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return NULL;
++   }
++
++   *width = rep.width;
++   *height = rep.height;
++   *outCount = rep.count;
++
++   buffers = Xmalloc(rep.count * sizeof buffers[0]);
++   if (buffers == NULL) {
++      _XEatData(dpy, rep.count * sizeof repBuffer);
++      UnlockDisplay(dpy);
++      SyncHandle();
++      return NULL;
++   }
++
++   for (i = 0; i < rep.count; i++) {
++      _XReadPad(dpy, (char *) &repBuffer, sizeof repBuffer);
++      buffers[i].attachment = repBuffer.attachment;
++      buffers[i].name = repBuffer.name;
++      buffers[i].pitch = repBuffer.pitch;
++      buffers[i].cpp = repBuffer.cpp;
++      buffers[i].flags = repBuffer.flags;
++   }
++
++   UnlockDisplay(dpy);
++   SyncHandle();
++
++   return buffers;
++}
++
++
++void
++DRI2CopyRegion(Display * dpy, XID drawable, XserverRegion region,
++               CARD32 dest, CARD32 src)
++{
++   XExtDisplayInfo *info = DRI2FindDisplay(dpy);
++   xDRI2CopyRegionReq *req;
++   xDRI2CopyRegionReply rep;
++
++   XextSimpleCheckExtension(dpy, info, dri2ExtensionName);
++
++   LockDisplay(dpy);
++   GetReq(DRI2CopyRegion, req);
++   req->reqType = info->codes->major_opcode;
++   req->dri2ReqType = X_DRI2CopyRegion;
++   req->drawable = drawable;
++   req->region = region;
++   req->dest = dest;
++   req->src = src;
++
++   _XReply(dpy, (xReply *) & rep, 0, xFalse);
++
++   UnlockDisplay(dpy);
++   SyncHandle();
++}
+diff --git a/hw/kdrive/ephyr/dri2.h b/hw/kdrive/ephyr/dri2.h
+new file mode 100644
+index 0000000..9db77f4
+--- /dev/null
++++ b/hw/kdrive/ephyr/dri2.h
+@@ -0,0 +1,88 @@
++/*
++ * Copyright © 2007,2008 Red Hat, Inc.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Soft-
++ * ware"), to deal in the Software without restriction, including without
++ * limitation the rights to use, copy, modify, merge, publish, distribute,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, provided that the above copyright
++ * notice(s) and this permission notice appear in all copies of the Soft-
++ * ware and that both the above copyright notice(s) and this permission
++ * notice appear in supporting documentation.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
++ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABIL-
++ * ITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY
++ * RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN
++ * THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSE-
++ * QUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
++ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
++ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFOR-
++ * MANCE OF THIS SOFTWARE.
++ *
++ * Except as contained in this notice, the name of a copyright holder shall
++ * not be used in advertising or otherwise to promote the sale, use or
++ * other dealings in this Software without prior written authorization of
++ * the copyright holder.
++ *
++ * Authors:
++ *   Kristian Høgsberg (krh@redhat.com)
++ */
++
++#ifndef _DRI2_H_
++#define _DRI2_H_
++
++#include <X11/extensions/Xfixes.h>
++#include <X11/extensions/dri2tokens.h>
++#include <xf86drm.h>
++
++typedef struct
++{
++   unsigned int attachment;
++   unsigned int name;
++   unsigned int pitch;
++   unsigned int cpp;
++   unsigned int flags;
++} DRI2Buffer;
++
++extern Bool
++DRI2QueryExtension(Display * display, int *eventBase, int *errorBase);
++
++extern Bool
++DRI2QueryVersion(Display * display, int *major, int *minor);
++
++extern Bool
++DRI2Connect(Display * display, XID window,
++            char **driverName, char **deviceName);
++
++extern Bool
++DRI2Authenticate(Display * display, XID window, drm_magic_t magic);
++
++extern void
++DRI2CreateDrawable(Display * display, XID drawable);
++
++extern void
++DRI2DestroyDrawable(Display * display, XID handle);
++
++extern DRI2Buffer*
++DRI2GetBuffers(Display * dpy, XID drawable,
++               int *width, int *height,
++               unsigned int *attachments, int count,
++               int *outCount);
++
++/**
++ * \note
++ * This function is only supported with DRI2 version 1.1 or later.
++ */
++extern DRI2Buffer*
++DRI2GetBuffersWithFormat(Display * dpy, XID drawable,
++                         int *width, int *height,
++                         unsigned int *attachments,
++                         int count, int *outCount);
++
++extern void
++DRI2CopyRegion(Display * dpy, XID drawable,
++               XserverRegion region,
++               CARD32 dest, CARD32 src);
++#endif
+diff --git a/hw/kdrive/ephyr/ephyr.c b/hw/kdrive/ephyr/ephyr.c
+index 8096a24..e4252ee 100644
+--- a/hw/kdrive/ephyr/ephyr.c
++++ b/hw/kdrive/ephyr/ephyr.c
+@@ -38,6 +38,11 @@
+ #include "ephyrglxext.h"
+ #endif /* XF86DRI */
+ 
++#ifdef DRI2
++#include "ephyrdri2ext.h"
++#include "ephyrglxext.h"
++#endif
++
+ #include "xkbsrv.h"
+ 
+ extern int KdTsPhyScreen;
+@@ -49,6 +54,7 @@ KdKeyboardInfo *ephyrKbd;
+ KdPointerInfo *ephyrMouse;
+ EphyrKeySyms ephyrKeySyms;
+ Bool ephyrNoDRI=FALSE ;
++Bool ephyrNoDRI2=FALSE ;
+ Bool ephyrNoXV=FALSE ;
+ 
+ static int mouseState = 0;
+@@ -660,9 +666,23 @@ ephyrInitScreen (ScreenPtr pScreen)
+   }
+ #endif
+ 
++#ifdef DRI2
++  if (!ephyrNoDRI2 && !hostx_has_dri2 ()) {
++      EPHYR_LOG ("host x does not support DRI2. Disabling DRI2 forwarding\n") ;
++      ephyrNoDRI2 = TRUE ;
++  }
++
++  if (ephyrNoDRI && !ephyrNoDRI2) {
++    ephyrDRI2ExtensionInit (pScreen) ;
++    ephyrHijackGLXExtension () ;
++  }
++#endif
++
+ #ifdef GLXEXT
+-  if (ephyrNoDRI) {
+-      noGlxVisualInit = FALSE ;
++  if (ephyrNoDRI && ephyrNoDRI2) {
++    noGlxVisualInit = FALSE ;
++  } else {
++    noGlxVisualInit = TRUE ;
+   }
+ #endif
+ 
+@@ -916,24 +936,47 @@ ephyrPoll(void)
+ #ifdef XF86DRI
+                   EphyrWindowPair *pair = NULL;
+ #endif
++#ifdef DRI2
++                  EphyrDRI2WindowPair *dri2_pair = NULL;
++#endif
+                   EPHYR_LOG ("enqueuing mouse motion:%d\n", ephyrCurScreen) ;
+                   x = ev.data.mouse_motion.x;
+                   y = ev.data.mouse_motion.y;
+                   EPHYR_LOG ("initial (x,y):(%d,%d)\n", x, y) ;
+ #ifdef XF86DRI
+-                  EPHYR_LOG ("is this window peered by a gl drawable ?\n") ;
+-                  if (findWindowPairFromRemote (ev.data.mouse_motion.window,
+-                                                &pair))
+-                    {
+-                        EPHYR_LOG ("yes, it is peered\n") ;
+-                        x += pair->local->drawable.x;
+-                        y += pair->local->drawable.y;
+-                    }
+-                  else
+-                    {
+-                        EPHYR_LOG ("no, it is not peered\n") ;
+-                    }
+-                  EPHYR_LOG ("final (x,y):(%d,%d)\n", x, y) ;
++                  if (!ephyrNoDRI){
++                      EPHYR_LOG ("is this window peered by a gl drawable ?\n") ;
++                      if (findWindowPairFromRemote (ev.data.mouse_motion.window,
++                                                    &pair))
++                      {
++                          EPHYR_LOG ("yes, it is peered\n") ;
++                          x += pair->local->drawable.x;
++                          y += pair->local->drawable.y;
++                      }
++                      else
++                      {
++                          EPHYR_LOG ("no, it is not peered\n") ;
++                      }
++                      EPHYR_LOG ("final (x,y):(%d,%d)\n", x, y) ;
++                  }
++#endif
++
++#ifdef DRI2
++                  if (ephyrNoDRI && !ephyrNoDRI2) {
++                      EPHYR_LOG ("is this window peered by a gl drawable ?\n") ;
++                      if (findDRI2WindowPairFromRemote (ev.data.mouse_motion.window,
++                                                &dri2_pair))
++                      {
++                          EPHYR_LOG ("yes, it is peered\n") ;
++                          x += dri2_pair->local->drawable.x;
++                          y += dri2_pair->local->drawable.y;
++                      }
++                      else
++                      {
++                          EPHYR_LOG ("no, it is not peered\n") ;
++                      }
++                      EPHYR_LOG ("final (x,y):(%d,%d)\n", x, y) ;
++                  }
+ #endif
+                   KdEnqueuePointerEvent(ephyrMouse, mouseState, x, y, 0);
+               }
+diff --git a/hw/kdrive/ephyr/ephyrdri2.c b/hw/kdrive/ephyr/ephyrdri2.c
+new file mode 100644
+index 0000000..c8508b9
+--- /dev/null
++++ b/hw/kdrive/ephyr/ephyrdri2.c
+@@ -0,0 +1,118 @@
++/*
++ * Xephyr - A kdrive X server thats runs in a host X window.
++ *          Authored by Matthew Allum <mallum@openedhand.com>
++ *
++ * Copyright © 2007 OpenedHand Ltd
++ *
++ * Permission to use, copy, modify, distribute, and sell this software and its
++ * documentation for any purpose is hereby granted without fee, provided that
++ * the above copyright notice appear in all copies and that both that
++ * copyright notice and this permission notice appear in supporting
++ * documentation, and that the name of OpenedHand Ltd not be used in
++ * advertising or publicity pertaining to distribution of the software without
++ * specific, written prior permission. OpenedHand Ltd makes no
++ * representations about the suitability of this software for any purpose.  It
++ * is provided "as is" without express or implied warranty.
++ *
++ * OpenedHand Ltd DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
++ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
++ * EVENT SHALL OpenedHand Ltd BE LIABLE FOR ANY SPECIAL, INDIRECT OR
++ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
++ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
++ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
++ * PERFORMANCE OF THIS SOFTWARE.
++ *
++ * Authors:
++ *    Haitao Feng <haitao.feng@intel.com>
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <kdrive-config.h>
++#endif
++
++#include "scrnintstr.h"
++#include <X11/Xutil.h>
++#include <X11/Xlibint.h>
++#include <GL/glx.h>
++#include "hostx.h"
++#define _HAVE_XALLOC_DECLS
++#include "ephyrlog.h"
++#include "dixstruct.h"
++#include "pixmapstr.h"
++#include "ephyrdri2.h"
++
++#ifndef TRUE
++#define TRUE 1
++#endif /*TRUE*/
++
++#ifndef FALSE
++#define FALSE 0
++#endif /*FALSE*/
++
++Bool
++ephyrDRI2Connect(ScreenPtr pScreen, unsigned int driverType, int *fd,
++        char **driverName, char **deviceName)
++{
++    Display *dpy = hostx_get_display () ;
++    return DRI2Connect(dpy, RootWindow(dpy, DefaultScreen(dpy)), driverName, deviceName);
++}
++
++Bool ephyrDRI2Authenticate(ScreenPtr pScreen, drm_magic_t magic)
++{
++    Display *dpy = hostx_get_display () ;
++    return DRI2Authenticate(dpy, RootWindow(dpy, DefaultScreen(dpy)), magic);
++}
++
++int ephyrDRI2CreateDrawable(XID drawable)
++{
++    Display *dpy = hostx_get_display () ;
++    DRI2CreateDrawable(dpy, drawable);
++    return Success ;
++}
++
++DRI2Buffer *ephyrDRI2GetBuffers(XID drawable,
++                 int *width,
++                 int *height,
++                 unsigned int *attachments,
++                 int count,
++                 int *out_count)
++{
++    Display *dpy = hostx_get_display ();
++    return DRI2GetBuffers(dpy, drawable, width, height, attachments, count, out_count);
++}
++
++DRI2Buffer *ephyrDRI2GetBuffersWithFormat(XID drawable,
++    int *width, int *height, unsigned int *attachments, int count,
++    int *out_count)
++{
++    Display *dpy = hostx_get_display ();
++    return DRI2GetBuffersWithFormat(dpy, drawable, width, height, attachments, count, out_count);
++}
++
++int ephyrDRI2CopyRegion(XID drawable,
++           EphyrDRI2WindowPair *pair,
++           RegionPtr pRegion,
++           unsigned int dest,
++           unsigned int src)
++{
++    Display *dpy = hostx_get_display ();
++    XRectangle xrect;
++    XserverRegion region;
++
++    xrect.x = pRegion->extents.x1;
++    xrect.y = pRegion->extents.y1;
++    xrect.width  = pRegion->extents.x2 - pRegion->extents.x1;
++    xrect.height = pRegion->extents.y2 - pRegion->extents.y1;
++
++    region = XFixesCreateRegion(dpy, &xrect, 1);
++    DRI2CopyRegion(dpy, pair->remote, region, dest, src);
++    XFixesDestroyRegion(dpy, region);
++
++    return Success;
++}
++
++void ephyrDRI2DestroyDrawable(XID drawable)
++{
++    Display *dpy = hostx_get_display ();
++    return DRI2DestroyDrawable(dpy, drawable);
++}
+diff --git a/hw/kdrive/ephyr/ephyrdri2.h b/hw/kdrive/ephyr/ephyrdri2.h
+new file mode 100644
+index 0000000..7132261
+--- /dev/null
++++ b/hw/kdrive/ephyr/ephyrdri2.h
+@@ -0,0 +1,69 @@
++/*
++ * Xephyr - A kdrive X server thats runs in a host X window.
++ *          Authored by Matthew Allum <mallum@openedhand.com>
++ *
++ * Copyright © 2007 OpenedHand Ltd
++ *
++ * Permission to use, copy, modify, distribute, and sell this software and its
++ * documentation for any purpose is hereby granted without fee, provided that
++ * the above copyright notice appear in all copies and that both that
++ * copyright notice and this permission notice appear in supporting
++ * documentation, and that the name of OpenedHand Ltd not be used in
++ * advertising or publicity pertaining to distribution of the software without
++ * specific, written prior permission. OpenedHand Ltd makes no
++ * representations about the suitability of this software for any purpose.  It
++ * is provided "as is" without express or implied warranty.
++ *
++ * OpenedHand Ltd DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
++ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
++ * EVENT SHALL OpenedHand Ltd BE LIABLE FOR ANY SPECIAL, INDIRECT OR
++ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
++ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
++ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
++ * PERFORMANCE OF THIS SOFTWARE.
++ *
++ * Authors:
++ *    Haitao Feng <haitao.feng@intel.com>
++ */
++
++#ifndef __EPHYRDRI2_H__
++#define __EPHYRDRI2_H__
++
++#include <X11/extensions/dri2tokens.h>
++#include "dri2.h"
++#include "ephyrdri2ext.h"
++
++void ephyrDRI2CloseScreen(ScreenPtr pScreen);
++
++Bool ephyrDRI2Connect(ScreenPtr pScreen,
++         unsigned int driverType,
++         int *fd,
++         char **driverName,
++         char **deviceName);
++
++Bool ephyrDRI2Authenticate(ScreenPtr pScreen, drm_magic_t magic);
++
++int ephyrDRI2CreateDrawable(XID drawable);
++
++void ephyrDRI2DestroyDrawable(XID drawable);
++
++DRI2Buffer *ephyrDRI2GetBuffers(XID drawable,
++                 int *width,
++                 int *height,
++                 unsigned int *attachments,
++                 int count,
++                 int *out_count);
++
++int ephyrDRI2CopyRegion(XID drawable,
++           EphyrDRI2WindowPair *pair,
++           RegionPtr pRegion,
++           unsigned int dest,
++           unsigned int src);
++
++extern _X_EXPORT void ephyrDRI2Version(int *major, int *minor);
++
++extern _X_EXPORT DRI2Buffer *ephyrDRI2GetBuffersWithFormat(XID drawable,
++                int *width, int *height, unsigned int *attachments, int count,
++                int *out_count);
++
++#endif /*__EPHYRDRI2_H__*/
+diff --git a/hw/kdrive/ephyr/ephyrdri2ext.c b/hw/kdrive/ephyr/ephyrdri2ext.c
+new file mode 100644
+index 0000000..cb1ae16
+--- /dev/null
++++ b/hw/kdrive/ephyr/ephyrdri2ext.c
+@@ -0,0 +1,1212 @@
++/*
++ * Xephyr - A kdrive X server thats runs in a host X window.
++ *          Authored by Matthew Allum <mallum@openedhand.com>
++ * 
++ * Copyright © 2007 OpenedHand Ltd 
++ *
++ * Permission to use, copy, modify, distribute, and sell this software and its
++ * documentation for any purpose is hereby granted without fee, provided that
++ * the above copyright notice appear in all copies and that both that
++ * copyright notice and this permission notice appear in supporting
++ * documentation, and that the name of OpenedHand Ltd not be used in
++ * advertising or publicity pertaining to distribution of the software without
++ * specific, written prior permission. OpenedHand Ltd makes no
++ * representations about the suitability of this software for any purpose.  It
++ * is provided "as is" without express or implied warranty.
++ *
++ * OpenedHand Ltd DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
++ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
++ * EVENT SHALL OpenedHand Ltd BE LIABLE FOR ANY SPECIAL, INDIRECT OR
++ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
++ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
++ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
++ * PERFORMANCE OF THIS SOFTWARE.
++ *
++ * This file is heavily copied from hw/free86/dri2/dri2ext.c
++ *
++ * Authors:
++ *    Haitao Feng <haitao.feng@intel.com>
++ */
++
++#ifdef HAVE_CONFIG_H
++#include <kdrive-config.h>
++#endif
++
++#include <string.h>
++
++#define NEED_REPLIES
++#define NEED_EVENTS
++#include <X11/X.h>
++#include <X11/Xproto.h>
++#include "misc.h"
++#include "privates.h"
++#include "dixstruct.h"
++#include "extnsionst.h"
++#include "colormapst.h"
++#include "cursorstr.h"
++#include "scrnintstr.h"
++#include "windowstr.h"
++#include "servermd.h"
++#include "swaprep.h"
++#include "ephyrdri.h"
++#include "ephyrdriext.h"
++#include "hostx.h"
++#define _HAVE_XALLOC_DECLS
++#include "ephyrlog.h"
++
++#include "ephyrdri2ext.h"
++
++#include <X11/extensions/dri2proto.h>
++#include "ephyrdri2.h"
++#include <X11/extensions/xfixeswire.h>
++#include <X11/Xlib.h>
++
++extern RESTYPE    RegionResType;
++extern int    XFixesErrorBase;
++#define VERIFY_REGION(pRegion, rid, client, mode)           \
++    do {                                \
++    int err;                            \
++    err = dixLookupResourceByType((pointer *) &pRegion, rid,    \
++                      RegionResType, client, mode); \
++    if (err != Success) {                       \
++        client->errorValue = rid;                   \
++        return err;                         \
++    }                               \
++    } while (0)
++
++typedef struct {
++    int foo;
++} EphyrDRI2WindowPrivRec;
++typedef EphyrDRI2WindowPrivRec* EphyrDRI2WindowPrivPtr;
++
++typedef struct {
++    CreateWindowProcPtr CreateWindow ;
++    DestroyWindowProcPtr DestroyWindow ;
++    MoveWindowProcPtr MoveWindow ;
++    PositionWindowProcPtr PositionWindow ;
++    ClipNotifyProcPtr ClipNotify ;
++} EphyrDRI2ScreenPrivRec;
++typedef EphyrDRI2ScreenPrivRec* EphyrDRI2ScreenPrivPtr;
++
++static DISPATCH_PROC(ProcDRI2QueryVersion);
++static DISPATCH_PROC(ProcDRI2Connect);
++static DISPATCH_PROC(ProcDRI2Authenticate);
++static DISPATCH_PROC(ProcDRI2CreateDrawable);
++static DISPATCH_PROC(ProcDRI2DestroyDrawable);
++static DISPATCH_PROC(ProcDRI2GetBuffers);
++static DISPATCH_PROC(ProcDRI2GetBuffersWithFormat);
++static DISPATCH_PROC(ProcDRI2CopyRegion);
++static DISPATCH_PROC(ProcDRI2Dispatch);
++static DISPATCH_PROC(SProcDRI2Connect);
++static DISPATCH_PROC(SProcDRI2Dispatch);
++
++static Bool ephyrDRI2ScreenInit (ScreenPtr a_screen) ;
++static Bool ephyrDRI2CreateWindow (WindowPtr a_win) ;
++static Bool ephyrDRI2DestroyWindow (WindowPtr a_win) ;
++static void ephyrDRI2MoveWindow (WindowPtr a_win,
++                                int a_x, int a_y,
++                                WindowPtr a_siblings,
++                                VTKind a_kind);
++static Bool ephyrDRI2PositionWindow (WindowPtr a_win,
++                                    int x, int y) ;
++static void ephyrDRI2ClipNotify (WindowPtr a_win,
++                                int a_x, int a_y) ;
++
++static Bool EphyrMirrorHostVisuals (ScreenPtr a_screen) ;
++static Bool destroyHostPeerWindow (const WindowPtr a_win) ;
++static Bool findWindowPairFromLocal (WindowPtr a_local,
++                                     EphyrDRI2WindowPair **a_pair);
++
++static DevPrivateKeyRec ephyrDRI2WindowKeyRec;
++#define ephyrDRI2WindowKey (&ephyrDRI2WindowKeyRec)
++
++static DevPrivateKeyRec ephyrDRI2ScreenKeyRec;
++#define ephyrDRI2ScreenKey (&ephyrDRI2ScreenKeyRec)
++
++#define GET_EPHYR_DRI2_WINDOW_PRIV(win) ((EphyrDRI2WindowPrivPtr) \
++    dixLookupPrivate(&(win)->devPrivates, ephyrDRI2WindowKey))
++#define GET_EPHYR_DRI2_SCREEN_PRIV(screen) ((EphyrDRI2ScreenPrivPtr) \
++    dixLookupPrivate(&(screen)->devPrivates, ephyrDRI2ScreenKey))
++
++static ExtensionEntry    *dri2Extension;
++static RESTYPE         dri2DrawableRes;
++
++static int DRI2DrawableGone(pointer p, XID id)
++{
++    DrawablePtr pDrawable = p;
++    WindowPtr window       = (WindowPtr)pDrawable;
++    EphyrDRI2WindowPair *pair = NULL;
++
++    memset (&pair, 0, sizeof (pair)) ;
++    if (!findWindowPairFromLocal (window, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to find remote peer drawable\n") ;
++        return BadMatch ;
++    }
++    ephyrDRI2DestroyDrawable(pair->remote);
++
++    return Success;
++}
++
++Bool
++ephyrDRI2ExtensionInit (ScreenPtr a_screen)
++{
++    Bool is_ok=FALSE ;
++    EphyrDRI2ScreenPrivPtr screen_priv=NULL ;
++
++    EPHYR_LOG ("enter\n") ;
++    if (!hostx_has_dri2 ()) {
++        EPHYR_LOG ("host does not have DRI2 extension\n") ;
++        goto out ;
++    }
++    EPHYR_LOG ("host X does have DRI2 extension\n") ;
++
++    if (!hostx_has_xshape ()) {
++        EPHYR_LOG ("host does not have XShape extension\n") ;
++        goto out ;
++    }
++    EPHYR_LOG ("host X does have XShape extension\n") ;
++
++    dri2Extension = AddExtension(DRI2_NAME,
++                 DRI2NumberEvents,
++                 DRI2NumberErrors,
++                 ProcDRI2Dispatch,
++                 SProcDRI2Dispatch,
++                 NULL,
++                 StandardMinorOpcode);
++
++    if (!dri2Extension){
++        EPHYR_LOG_ERROR ("failed to register DRI extension\n") ;
++        goto out;
++    }
++
++    dri2DrawableRes = CreateNewResourceType(DRI2DrawableGone, "DRI2Drawable");
++
++    screen_priv = calloc (1, sizeof (EphyrDRI2ScreenPrivRec)) ;
++    if (!screen_priv) {
++        EPHYR_LOG_ERROR ("failed to allocate screen_priv\n") ;
++        goto out ;
++    }
++
++    if (!dixRegisterPrivateKey(ephyrDRI2ScreenKey, PRIVATE_SCREEN, 0)) {
++        EPHYR_LOG_ERROR ("failed to register screen_priv\n") ;
++        goto out;
++    }
++
++    if (!dixRegisterPrivateKey(ephyrDRI2WindowKey, PRIVATE_WINDOW, 0)) {
++        EPHYR_LOG_ERROR ("failed to register window_priv\n") ;
++        goto out;
++    }
++
++    dixSetPrivate(&a_screen->devPrivates, ephyrDRI2ScreenKey, screen_priv);
++
++    if (!ephyrDRI2ScreenInit (a_screen)) {
++        EPHYR_LOG_ERROR ("ephyrDRI2ScreenInit() failed\n") ;
++        goto out ;
++    }
++    EphyrMirrorHostVisuals (a_screen) ;
++    is_ok=TRUE ;
++out:
++    EPHYR_LOG ("leave\n") ;
++    return is_ok ;
++}
++
++static Bool
++ephyrDRI2ScreenInit (ScreenPtr a_screen)
++{
++    Bool is_ok=FALSE ;
++    EphyrDRI2ScreenPrivPtr screen_priv=NULL ;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_screen, FALSE) ;
++
++    screen_priv=GET_EPHYR_DRI2_SCREEN_PRIV (a_screen) ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen_priv, FALSE) ;
++
++    screen_priv->CreateWindow = a_screen->CreateWindow ;
++    screen_priv->DestroyWindow = a_screen->DestroyWindow ;
++    screen_priv->MoveWindow = a_screen->MoveWindow ;
++    screen_priv->PositionWindow = a_screen->PositionWindow ;
++    screen_priv->ClipNotify = a_screen->ClipNotify ;
++
++    a_screen->CreateWindow = ephyrDRI2CreateWindow ;
++    a_screen->DestroyWindow = ephyrDRI2DestroyWindow ;
++    a_screen->MoveWindow = ephyrDRI2MoveWindow ;
++    a_screen->PositionWindow = ephyrDRI2PositionWindow ;
++    a_screen->ClipNotify = ephyrDRI2ClipNotify ;
++
++    is_ok = TRUE ;
++
++    return is_ok ;
++}
++
++static Bool
++ephyrDRI2CreateWindow (WindowPtr a_win)
++{
++    Bool is_ok=FALSE ;
++    ScreenPtr screen=NULL ;
++    EphyrDRI2ScreenPrivPtr screen_priv =NULL;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_win, FALSE) ;
++    screen = a_win->drawable.pScreen ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen, FALSE) ;
++    screen_priv = GET_EPHYR_DRI2_SCREEN_PRIV (screen) ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen_priv
++                              && screen_priv->CreateWindow,
++                              FALSE) ;
++
++    EPHYR_LOG ("enter. win:%p\n", a_win) ;
++
++    screen->CreateWindow = screen_priv->CreateWindow ;
++    is_ok = (*screen->CreateWindow) (a_win) ;
++    screen->CreateWindow = ephyrDRI2CreateWindow ;
++
++    if (is_ok) {
++        dixSetPrivate(&a_win->devPrivates, ephyrDRI2WindowKey, NULL);
++    }
++    return is_ok ;
++}
++
++static Bool
++ephyrDRI2DestroyWindow (WindowPtr a_win)
++{
++    Bool is_ok=FALSE ;
++    ScreenPtr screen=NULL ;
++    EphyrDRI2ScreenPrivPtr screen_priv =NULL;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_win, FALSE) ;
++    screen = a_win->drawable.pScreen ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen, FALSE) ;
++    screen_priv = GET_EPHYR_DRI2_SCREEN_PRIV (screen) ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen_priv
++                              && screen_priv->DestroyWindow,
++                              FALSE) ;
++
++    screen->DestroyWindow = screen_priv->DestroyWindow ;
++    if (screen->DestroyWindow) {
++        is_ok = (*screen->DestroyWindow) (a_win) ;
++    }
++    screen->DestroyWindow = ephyrDRI2DestroyWindow ;
++
++    if (is_ok) {
++        EphyrDRI2WindowPrivPtr win_priv=GET_EPHYR_DRI2_WINDOW_PRIV (a_win) ;
++        if (win_priv) {
++            destroyHostPeerWindow (a_win) ;
++            free (win_priv) ;
++            dixSetPrivate(&a_win->devPrivates, ephyrDRI2WindowKey, NULL);
++            EPHYR_LOG ("destroyed the remote peer window\n") ;
++        }
++    }
++    return is_ok ;
++}
++
++static void
++ephyrDRI2MoveWindow (WindowPtr a_win,
++                    int a_x, int a_y,
++                    WindowPtr a_siblings,
++                    VTKind a_kind)
++{
++    Bool is_ok=FALSE ;
++    ScreenPtr screen=NULL ;
++    EphyrDRI2ScreenPrivPtr screen_priv =NULL;
++    EphyrDRI2WindowPrivPtr win_priv=NULL ;
++    EphyrDRI2WindowPair *pair=NULL ;
++    EphyrBox geo;
++    int x=0,y=0;/*coords relative to parent window*/
++
++    EPHYR_RETURN_IF_FAIL (a_win) ;
++
++    EPHYR_LOG ("enter\n") ;
++    screen = a_win->drawable.pScreen ;
++    EPHYR_RETURN_IF_FAIL (screen) ;
++    screen_priv = GET_EPHYR_DRI2_SCREEN_PRIV (screen) ;
++    EPHYR_RETURN_IF_FAIL (screen_priv
++                          && screen_priv->MoveWindow) ;
++
++    screen->MoveWindow = screen_priv->MoveWindow ;
++    if (screen->MoveWindow) {
++        (*screen->MoveWindow) (a_win, a_x, a_y, a_siblings, a_kind) ;
++    }
++    screen->MoveWindow = ephyrDRI2MoveWindow ;
++
++    EPHYR_LOG ("window: %p\n", a_win) ;
++    if (!a_win->parent) {
++        EPHYR_LOG ("cannot move root window\n") ;
++        is_ok = TRUE ;
++        goto out ;
++    }
++    win_priv = GET_EPHYR_DRI2_WINDOW_PRIV (a_win) ;
++    if (!win_priv) {
++        EPHYR_LOG ("not a DRI peered window\n") ;
++        is_ok = TRUE ;
++        goto out ;
++    }
++    if (!findWindowPairFromLocal (a_win, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to get window pair\n") ;
++        goto out ;
++    }
++    /*compute position relative to parent window*/
++    x = a_win->drawable.x - a_win->parent->drawable.x ;
++    y = a_win->drawable.y - a_win->parent->drawable.y ;
++    /*set the geometry to pass to hostx_set_window_geometry*/
++    memset (&geo, 0, sizeof (geo)) ;
++    geo.x = x ;
++    geo.y = y ;
++    geo.width = a_win->drawable.width ;
++    geo.height = a_win->drawable.height ;
++    hostx_set_window_geometry (pair->remote, &geo) ;
++    is_ok = TRUE ;
++
++out:
++    EPHYR_LOG ("leave. is_ok:%d\n", is_ok) ;
++    /*do cleanup here*/
++}
++
++static Bool
++ephyrDRI2PositionWindow (WindowPtr a_win,
++                        int a_x, int a_y)
++{
++    Bool is_ok=FALSE ;
++    ScreenPtr screen=NULL ;
++    EphyrDRI2ScreenPrivPtr screen_priv =NULL;
++    EphyrDRI2WindowPrivPtr win_priv=NULL ;
++    EphyrDRI2WindowPair *pair=NULL ;
++    EphyrBox geo;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_win, FALSE) ;
++
++    EPHYR_LOG ("enter\n") ;
++    screen = a_win->drawable.pScreen ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen, FALSE) ;
++    screen_priv = GET_EPHYR_DRI2_SCREEN_PRIV (screen) ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen_priv
++                              && screen_priv->PositionWindow,
++                              FALSE) ;
++
++    screen->PositionWindow = screen_priv->PositionWindow ;
++    if (screen->PositionWindow) {
++        (*screen->PositionWindow) (a_win, a_x, a_y) ;
++    }
++    screen->PositionWindow = ephyrDRI2PositionWindow ;
++
++    EPHYR_LOG ("window: %p\n", a_win) ;
++    win_priv = GET_EPHYR_DRI2_WINDOW_PRIV (a_win) ;
++    if (!win_priv) {
++        EPHYR_LOG ("not a DRI peered window\n") ;
++        is_ok = TRUE ;
++        goto out ;
++    }
++    if (!findWindowPairFromLocal (a_win, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to get window pair\n") ;
++        goto out ;
++    }
++    /*set the geometry to pass to hostx_set_window_geometry*/
++    memset (&geo, 0, sizeof (geo)) ;
++    geo.x = a_x ;
++    geo.y = a_y ;
++    geo.width = a_win->drawable.width ;
++    geo.height = a_win->drawable.height ;
++    hostx_set_window_geometry (pair->remote, &geo) ;
++    is_ok = TRUE ;
++
++out:
++    EPHYR_LOG ("leave. is_ok:%d\n", is_ok) ;
++    /*do cleanup here*/
++    return is_ok ;
++}
++
++static void
++ephyrDRI2ClipNotify (WindowPtr a_win,
++                    int a_x, int a_y)
++{
++    Bool is_ok=FALSE ;
++    ScreenPtr screen=NULL ;
++    EphyrDRI2ScreenPrivPtr screen_priv =NULL;
++    EphyrDRI2WindowPrivPtr win_priv=NULL ;
++    EphyrDRI2WindowPair *pair=NULL ;
++    EphyrRect *rects=NULL;
++    int i=0 ;
++
++    EPHYR_RETURN_IF_FAIL (a_win) ;
++
++    EPHYR_LOG ("enter\n") ;
++    screen = a_win->drawable.pScreen ;
++    EPHYR_RETURN_IF_FAIL (screen) ;
++    screen_priv = GET_EPHYR_DRI2_SCREEN_PRIV (screen) ;
++    EPHYR_RETURN_IF_FAIL (screen_priv && screen_priv->ClipNotify) ;
++
++    screen->ClipNotify = screen_priv->ClipNotify ;
++    if (screen->ClipNotify) {
++        (*screen->ClipNotify) (a_win, a_x, a_y) ;
++    }
++    screen->ClipNotify = ephyrDRI2ClipNotify ;
++
++    EPHYR_LOG ("window: %p\n", a_win) ;
++    win_priv = GET_EPHYR_DRI2_WINDOW_PRIV (a_win) ;
++    if (!win_priv) {
++        EPHYR_LOG ("not a DRI peered window\n") ;
++        is_ok = TRUE ;
++        goto out ;
++    }
++    if (!findWindowPairFromLocal (a_win, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to get window pair\n") ;
++        goto out ;
++    }
++    rects = calloc (REGION_NUM_RECTS (&a_win->clipList),
++                     sizeof (EphyrRect)) ;
++    for (i=0; i < REGION_NUM_RECTS (&a_win->clipList); i++) {
++        memmove (&rects[i],
++                 &REGION_RECTS (&a_win->clipList)[i],
++                 sizeof (EphyrRect)) ;
++        rects[i].x1 -= a_win->drawable.x;
++        rects[i].x2 -= a_win->drawable.x;
++        rects[i].y1 -= a_win->drawable.y;
++        rects[i].y2 -= a_win->drawable.y;
++    }
++    /*
++     * push the clipping region of this window
++     * to the peer window in the host
++     */
++    is_ok = hostx_set_window_bounding_rectangles
++                                (pair->remote,
++                                 rects,
++                                 REGION_NUM_RECTS (&a_win->clipList)) ;
++    is_ok = TRUE ;
++
++out:
++    if (rects) {
++        free (rects) ;
++        rects = NULL ;
++    }
++    EPHYR_LOG ("leave. is_ok:%d\n", is_ok) ;
++    /*do cleanup here*/
++}
++
++/**
++ * Duplicates a visual of a_screen
++ * In screen a_screen, for depth a_depth, find a visual which
++ * bitsPerRGBValue and colormap size equal
++ * a_bits_per_rgb_values and a_colormap_entries.
++ * The ID of that duplicated visual is set to a_new_id.
++ * That duplicated visual is then added to the list of visuals
++ * of the screen.
++ */
++static Bool
++EphyrDuplicateVisual (unsigned int a_screen,
++                      short a_depth,
++                      short a_class,
++                      short a_bits_per_rgb_values,
++                      short a_colormap_entries,
++                      unsigned int a_red_mask,
++                      unsigned int a_green_mask,
++                      unsigned int a_blue_mask,
++                      unsigned int a_new_id)
++{
++    Bool is_ok = FALSE, found_visual=FALSE, found_depth=FALSE ;
++    ScreenPtr screen=NULL ;
++    VisualRec new_visual, *new_visuals=NULL ;
++    int i=0 ;
++
++    EPHYR_LOG ("enter\n") ; 
++    if (a_screen > screenInfo.numScreens) {
++        EPHYR_LOG_ERROR ("bad screen number\n") ;
++        goto out;
++    }
++    memset (&new_visual, 0, sizeof (VisualRec)) ;
++
++    /*get the screen pointed to by a_screen*/
++    screen = screenInfo.screens[a_screen] ;
++    EPHYR_RETURN_VAL_IF_FAIL (screen, FALSE) ;
++
++    /*
++     * In that screen, first look for an existing visual that has the
++     * same characteristics as those passed in parameter
++     * to this function and copy it.
++     */
++    for (i=0; i < screen->numVisuals; i++) {
++        if (screen->visuals[i].bitsPerRGBValue == a_bits_per_rgb_values &&
++            screen->visuals[i].ColormapEntries == a_colormap_entries ) {
++            /*copy the visual found*/
++            memcpy (&new_visual, &screen->visuals[i], sizeof (new_visual)) ;
++            new_visual.vid = a_new_id ;
++            new_visual.class = a_class ;
++            new_visual.redMask = a_red_mask ;
++            new_visual.greenMask = a_green_mask ;
++            new_visual.blueMask = a_blue_mask ;
++            found_visual = TRUE ;
++            EPHYR_LOG ("found a visual that matches visual id: %d\n",
++                       a_new_id) ;
++            break;
++        }
++    }
++    if (!found_visual) {
++        EPHYR_LOG ("did not find any visual matching %d\n", a_new_id) ;
++        goto out ;
++    }
++    /*
++     * be prepare to extend screen->visuals to add new_visual to it
++     */
++    new_visuals = calloc (screen->numVisuals+1, sizeof (VisualRec)) ;
++    memmove (new_visuals,
++             screen->visuals,
++             screen->numVisuals*sizeof (VisualRec)) ;
++    memmove (&new_visuals[screen->numVisuals],
++             &new_visual,
++             sizeof (VisualRec)) ;
++    /*
++     * Now, in that same screen, update the screen->allowedDepths member.
++     * In that array, each element represents the visuals applicable to
++     * a given depth. So we need to add an entry matching the new visual
++     * that we are going to add to screen->visuals
++     */
++    for (i=0; i<screen->numDepths; i++) {
++        VisualID *vids=NULL;
++        DepthPtr cur_depth=NULL ;
++        /*find the entry matching a_depth*/
++        if (screen->allowedDepths[i].depth != a_depth)
++            continue ;
++        cur_depth = &screen->allowedDepths[i];
++        /*
++         * extend the list of visual IDs in that entry,
++         * so to add a_new_id in there.
++         */
++        vids = realloc (cur_depth->vids,
++                         (cur_depth->numVids+1)*sizeof (VisualID));
++        if (!vids) {
++            EPHYR_LOG_ERROR ("failed to realloc numids\n") ;
++            goto out ;
++        }
++        vids[cur_depth->numVids] = a_new_id ;
++        /*
++         * Okay now commit our change.
++         * Do really update screen->allowedDepths[i]
++         */
++        cur_depth->numVids++ ;
++        cur_depth->vids = vids ;
++        found_depth=TRUE;
++    }
++    if (!found_depth) {
++        EPHYR_LOG_ERROR ("failed to update screen[%d]->allowedDepth\n",
++                         a_screen) ;
++        goto out ;
++    }
++    /*
++     * Commit our change to screen->visuals
++     */
++    free (screen->visuals) ;
++    screen->visuals = new_visuals ;
++    screen->numVisuals++ ;
++    new_visuals = NULL ;
++
++    is_ok = TRUE ;
++out:
++    if (new_visuals) {
++        free (new_visuals) ;
++        new_visuals = NULL ;
++    }
++    EPHYR_LOG ("leave\n") ; 
++    return is_ok ;
++}
++
++/**
++ * Duplicates the visuals of the host X server.
++ * This is necessary to have visuals that have the same
++ * ID as those of the host X. It is important to have that for
++ * GLX.
++ */
++static Bool
++EphyrMirrorHostVisuals (ScreenPtr a_screen)
++{
++    Bool is_ok=FALSE;
++    EphyrHostVisualInfo  *visuals=NULL;
++    int nb_visuals=0, i=0;
++
++    EPHYR_LOG ("enter\n") ;
++    if (!hostx_get_visuals_info (&visuals, &nb_visuals)) {
++        EPHYR_LOG_ERROR ("failed to get host visuals\n") ;
++        goto out ;
++    }
++    for (i=0; i<nb_visuals; i++) {
++        if (!EphyrDuplicateVisual (a_screen->myNum,
++                                   visuals[i].depth,
++                                   visuals[i].class,
++                                   visuals[i].bits_per_rgb,
++                                   visuals[i].colormap_size,
++                                   visuals[i].red_mask,
++                                   visuals[i].green_mask,
++                                   visuals[i].blue_mask,
++                                   visuals[i].visualid)) {
++            EPHYR_LOG_ERROR ("failed to duplicate host visual %d\n",
++                             (int)visuals[i].visualid) ;
++        }
++    }
++
++    is_ok = TRUE ;
++out:
++    EPHYR_LOG ("leave\n") ;
++    return is_ok;
++}
++
++static Bool
++getWindowVisual (const WindowPtr a_win,
++                 VisualPtr *a_visual)
++{
++    int i=0, visual_id=0 ;
++    EPHYR_RETURN_VAL_IF_FAIL (a_win
++                              && a_win->drawable.pScreen
++                              && a_win->drawable.pScreen->visuals,
++                              FALSE) ;
++
++    visual_id = wVisual (a_win) ;
++    for (i=0; i < a_win->drawable.pScreen->numVisuals; i++) {
++        if (a_win->drawable.pScreen->visuals[i].vid == visual_id) {
++            *a_visual = &a_win->drawable.pScreen->visuals[i] ;
++            return TRUE ;
++        }
++    }
++    return FALSE ;
++}
++
++#define NUM_WINDOW_PAIRS 256
++static EphyrDRI2WindowPair window_pairs[NUM_WINDOW_PAIRS] ;
++
++static Bool
++appendWindowPairToList (WindowPtr a_local,
++                        int a_remote)
++{
++    int i=0 ;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_local, FALSE) ;
++
++    EPHYR_LOG ("(local,remote):(%p, %d)\n", a_local, a_remote) ;
++
++    for (i=0; i < NUM_WINDOW_PAIRS; i++) {
++        if (window_pairs[i].local == NULL) {
++            window_pairs[i].local = a_local ;
++            window_pairs[i].remote = a_remote ;
++            return TRUE ;
++        }
++    }
++    return FALSE ;
++}
++
++static Bool
++findWindowPairFromLocal (WindowPtr a_local,
++                         EphyrDRI2WindowPair **a_pair)
++{
++    int i=0 ;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_pair && a_local, FALSE) ;
++
++    for (i=0; i < NUM_WINDOW_PAIRS; i++) {
++        if (window_pairs[i].local == a_local) {
++            *a_pair = &window_pairs[i] ;
++#if 0
++            EPHYR_LOG ("found (%p, %d)\n",
++                       (*a_pair)->local,
++                       (*a_pair)->remote) ;
++#endif
++            return TRUE ;
++        }
++    }
++    return FALSE ;
++}
++
++Bool
++findDRI2WindowPairFromRemote (int a_remote,
++                          EphyrDRI2WindowPair **a_pair)
++{
++    int i=0 ;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_pair, FALSE) ;
++
++    for (i=0; i < NUM_WINDOW_PAIRS; i++) {
++        if (window_pairs[i].remote == a_remote) {
++            *a_pair = &window_pairs[i] ;
++#if 0
++            EPHYR_LOG ("found (%p, %d)\n",
++                       (*a_pair)->local,
++                       (*a_pair)->remote) ;
++#endif
++            return TRUE ;
++        }
++    }
++    return FALSE ;
++}
++
++static Bool
++createHostPeerWindow (const WindowPtr a_win,
++                      int *a_peer_win)
++{
++    Bool is_ok=FALSE ;
++    VisualPtr visual=NULL;
++    EphyrBox geo ;
++
++    EPHYR_RETURN_VAL_IF_FAIL (a_win && a_peer_win, FALSE) ;
++    EPHYR_RETURN_VAL_IF_FAIL (a_win->drawable.pScreen,
++                              FALSE) ;
++
++    EPHYR_LOG ("enter. a_win '%p'\n", a_win) ;
++
++    if (!getWindowVisual (a_win, &visual)) {
++        EPHYR_LOG_ERROR ("failed to get window visual\n") ;
++        goto out ;
++    }
++    if (!visual) {
++        EPHYR_LOG_ERROR ("failed to create visual\n") ;
++        goto out ;
++    }
++
++    memset (&geo, 0, sizeof (geo)) ;
++    geo.x = a_win->drawable.x ;
++    geo.y = a_win->drawable.y ;
++    geo.width = a_win->drawable.width ;
++    geo.height = a_win->drawable.height ;
++
++    if (!hostx_create_window (a_win->drawable.pScreen->myNum,
++                              &geo, visual->vid, a_peer_win)) {
++        EPHYR_LOG_ERROR ("failed to create host peer window\n") ;
++        goto out ;
++    }
++    if (!appendWindowPairToList (a_win, *a_peer_win)) {
++        EPHYR_LOG_ERROR ("failed to append window to pair list\n") ;
++        goto out ;
++    }
++    is_ok = TRUE ;
++out:
++    EPHYR_LOG ("leave:remote win%d\n", *a_peer_win) ;
++    return is_ok ;
++}
++
++static Bool
++destroyHostPeerWindow (const WindowPtr a_win)
++{
++    Bool is_ok = FALSE ;
++    EphyrDRI2WindowPair *pair=NULL ;
++    EPHYR_RETURN_VAL_IF_FAIL (a_win, FALSE) ;
++
++    EPHYR_LOG ("enter\n") ;
++
++    if (!findWindowPairFromLocal (a_win, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to find peer to local window\n") ;
++        goto out;
++    }
++    hostx_destroy_window (pair->remote) ;
++    pair->local  = NULL;
++    pair->remote = 0;
++    is_ok = TRUE ;
++
++out:
++    EPHYR_LOG ("leave\n") ;
++    return is_ok;
++}
++
++static Bool
++validDrawable(ClientPtr client, XID drawable,
++          DrawablePtr *pDrawable, int *status)
++{
++    *status = dixLookupDrawable(pDrawable, drawable, client, 0, DixReadAccess);
++    if (*status != Success) {
++        client->errorValue = drawable;
++        return FALSE;
++    }
++
++    return TRUE;
++}
++
++static int
++ProcDRI2QueryVersion(ClientPtr client)
++{
++    REQUEST(xDRI2QueryVersionReq);
++    xDRI2QueryVersionReply rep;
++    int n;
++
++    if (client->swapped)
++        swaps(&stuff->length, n);
++
++    REQUEST_SIZE_MATCH(xDRI2QueryVersionReq);
++    rep.type = X_Reply;
++    rep.length = 0;
++    rep.sequenceNumber = client->sequence;
++    rep.majorVersion = 1;
++    rep.minorVersion = 1;
++
++    if (client->swapped) {
++        swaps(&rep.sequenceNumber, n);
++        swapl(&rep.length, n);
++        swapl(&rep.majorVersion, n);
++        swapl(&rep.minorVersion, n);
++    }
++
++    WriteToClient(client, sizeof(xDRI2QueryVersionReply), &rep);
++
++    return client->noClientException;
++}
++
++static int
++ProcDRI2Connect(ClientPtr client)
++{
++    REQUEST(xDRI2ConnectReq);
++    xDRI2ConnectReply rep;
++    DrawablePtr pDraw;
++    int fd, status;
++    char *driverName;
++    char *deviceName;
++
++    REQUEST_SIZE_MATCH(xDRI2ConnectReq);
++    if (!validDrawable(client, stuff->window, &pDraw, &status))
++        return status;
++
++    rep.type = X_Reply;
++    rep.length = 0;
++    rep.sequenceNumber = client->sequence;
++    rep.driverNameLength = 0;
++    rep.deviceNameLength = 0;
++
++    if (!ephyrDRI2Connect(pDraw->pScreen,
++             stuff->driverType, &fd, &driverName, &deviceName))
++        goto fail;
++
++    rep.driverNameLength = strlen(driverName);
++    rep.deviceNameLength = strlen(deviceName);
++    rep.length = (rep.driverNameLength + 3) / 4 +
++        (rep.deviceNameLength + 3) / 4;
++
++ fail:
++    WriteToClient(client, sizeof(xDRI2ConnectReply), &rep);
++    WriteToClient(client, rep.driverNameLength, driverName);
++    WriteToClient(client, rep.deviceNameLength, deviceName);
++
++    return client->noClientException;
++}
++
++static int
++ProcDRI2Authenticate(ClientPtr client)
++{
++    REQUEST(xDRI2AuthenticateReq);
++    xDRI2AuthenticateReply rep;
++    DrawablePtr pDraw;
++    int status;
++
++    REQUEST_SIZE_MATCH(xDRI2AuthenticateReq);
++    if (!validDrawable(client, stuff->window, &pDraw, &status))
++        return status;
++
++    rep.type = X_Reply;
++    rep.sequenceNumber = client->sequence;
++    rep.length = 0;
++    rep.authenticated = ephyrDRI2Authenticate(pDraw->pScreen, stuff->magic);
++    WriteToClient(client, sizeof(xDRI2AuthenticateReply), &rep);
++
++    return client->noClientException;
++}
++
++static int
++ProcDRI2CreateDrawable(ClientPtr client)
++{
++    REQUEST(xDRI2CreateDrawableReq);
++    DrawablePtr pDrawable;
++    int status;
++
++    int remote = 0;
++    int remote_win = 0;
++    WindowPtr window = NULL;
++    EphyrDRI2WindowPair *pair = NULL ;
++    EphyrDRI2WindowPrivPtr win_priv = NULL;
++
++    REQUEST_SIZE_MATCH(xDRI2CreateDrawableReq);
++
++    if (!validDrawable(client, stuff->drawable, &pDrawable, &status))
++        return status;
++
++    if (pDrawable->type == DRAWABLE_WINDOW) {
++        window = (WindowPtr)pDrawable;
++        if (findWindowPairFromLocal (window, &pair) && pair) {
++            remote_win = pair->remote;
++            //EPHYR_LOG ("found window '%p' paire with remote '%d'\n", window, remote_win) ;
++        } else if (!createHostPeerWindow (window, &remote_win)) {
++            EPHYR_LOG_ERROR ("failed to create host peer window\n") ;
++            return BadAlloc ;
++        }
++        remote = remote_win;
++    }else {
++        EPHYR_LOG_ERROR ("non-drawable windows are not yet supported\n") ;
++        return BadImplementation ;
++    }
++
++    status = ephyrDRI2CreateDrawable(remote);
++    if (status != Success)
++        return status;
++
++    win_priv = GET_EPHYR_DRI2_WINDOW_PRIV (window) ;
++    if (!win_priv) {
++        win_priv = calloc (1, sizeof (EphyrDRI2WindowPrivRec)) ;
++        if (!win_priv) {
++            EPHYR_LOG_ERROR ("failed to allocate window private\n") ;
++            return BadAlloc ;
++        }
++        dixSetPrivate(&window->devPrivates, ephyrDRI2WindowKey, win_priv);
++        EPHYR_LOG ("paired window '%p' with remote '%d'\n",
++                   window, remote_win) ;
++    }
++
++    if (!AddResource(stuff->drawable, dri2DrawableRes, pDrawable)) {
++        DRI2DrawableGone(pDrawable, stuff->drawable);
++        return BadAlloc;
++    }
++
++    return client->noClientException;
++}
++
++static int
++ProcDRI2DestroyDrawable(ClientPtr client)
++{
++    REQUEST(xDRI2DestroyDrawableReq);
++    DrawablePtr pDrawable;
++    int status;
++
++    REQUEST_SIZE_MATCH(xDRI2DestroyDrawableReq);
++    if (!validDrawable(client, stuff->drawable, &pDrawable, &status))
++        return status;
++
++    FreeResourceByType(stuff->drawable, dri2DrawableRes, FALSE);
++
++    return client->noClientException;
++}
++
++
++static void
++send_buffers_reply(ClientPtr client, DrawablePtr pDrawable,
++           DRI2Buffer *buffers, int count, int width, int height)
++{
++    xDRI2GetBuffersReply rep;
++    int skip = 0;
++    int i;
++
++    if (pDrawable->type == DRAWABLE_WINDOW) {
++    for (i = 0; i < count; i++) {
++        /* Do not send the real front buffer of a window to the client.
++         */
++        if (buffers[i].attachment == DRI2BufferFrontLeft) {
++            skip++;
++            continue;
++        }
++    }
++    }
++
++    rep.type = X_Reply;
++    rep.length = (count - skip) * sizeof(xDRI2Buffer) / 4;
++    rep.sequenceNumber = client->sequence;
++    rep.width = width;
++    rep.height = height;
++    rep.count = count - skip;
++    WriteToClient(client, sizeof(xDRI2GetBuffersReply), &rep);
++
++    for (i = 0; i < count; i++) {
++        xDRI2Buffer buffer;
++
++        /* Do not send the real front buffer of a window to the client.
++         */
++        if ((pDrawable->type == DRAWABLE_WINDOW)
++            && (buffers[i].attachment == DRI2BufferFrontLeft)) {
++            continue;
++        }
++
++        buffer.attachment = buffers[i].attachment;
++        buffer.name = buffers[i].name;
++        buffer.pitch = buffers[i].pitch;
++        buffer.cpp = buffers[i].cpp;
++        buffer.flags = buffers[i].flags;
++        WriteToClient(client, sizeof(xDRI2Buffer), &buffer);
++    }
++}
++
++
++static int
++ProcDRI2GetBuffers(ClientPtr client)
++{
++    REQUEST(xDRI2GetBuffersReq);
++    DrawablePtr pDrawable;
++    DRI2Buffer *buffers;
++    int status, width, height, count;
++    unsigned int *attachments;
++
++    WindowPtr window=NULL;
++    EphyrDRI2WindowPair *pair=NULL;
++
++    REQUEST_FIXED_SIZE(xDRI2GetBuffersReq, stuff->count * 4);
++    if (!validDrawable(client, stuff->drawable, &pDrawable, &status))
++        return status;
++
++    window = (WindowPtr)pDrawable ;
++    memset (&pair, 0, sizeof (pair)) ;
++    if (!findWindowPairFromLocal (window, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to find remote peer drawable\n") ;
++        return BadMatch ;
++    }
++
++    attachments = (unsigned int *) &stuff[1];
++    buffers = ephyrDRI2GetBuffers(pair->remote, &width, &height,
++                 attachments, stuff->count, &count);
++
++    if (buffers){
++        send_buffers_reply(client, pDrawable, buffers, count, width, height);
++    }
++
++    return client->noClientException;
++}
++
++static int
++ProcDRI2GetBuffersWithFormat(ClientPtr client)
++{
++    REQUEST(xDRI2GetBuffersReq);
++    DrawablePtr pDrawable;
++    DRI2Buffer *buffers;
++    int status, width, height, count;
++    unsigned int *attachments;
++
++    WindowPtr window=NULL;
++    EphyrDRI2WindowPair *pair=NULL;
++
++    REQUEST_FIXED_SIZE(xDRI2GetBuffersReq, stuff->count * (2 * 4));
++    if (!validDrawable(client, stuff->drawable, &pDrawable, &status))
++        return status;
++
++    window = (WindowPtr)pDrawable ;
++    memset (&pair, 0, sizeof (pair)) ;
++    if (!findWindowPairFromLocal (window, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to find remote peer drawable\n") ;
++        return BadMatch ;
++    }
++
++    attachments = (unsigned int *) &stuff[1];
++    buffers = ephyrDRI2GetBuffersWithFormat(pair->remote, &width, &height,
++                       attachments, stuff->count, &count);
++
++    if (buffers) {
++        send_buffers_reply(client, pDrawable, buffers, count, width, height);
++    }
++
++    return client->noClientException;
++}
++
++static int
++ProcDRI2CopyRegion(ClientPtr client)
++{
++    REQUEST(xDRI2CopyRegionReq);
++    xDRI2CopyRegionReply rep;
++    DrawablePtr pDrawable;
++    int status;
++    RegionPtr pRegion;
++
++    WindowPtr window=NULL;
++    EphyrDRI2WindowPair *pair=NULL;
++
++    REQUEST_SIZE_MATCH(xDRI2CopyRegionReq);
++
++    if (!validDrawable(client, stuff->drawable, &pDrawable, &status))
++        return status;
++
++    window = (WindowPtr)pDrawable ;
++    memset (&pair, 0, sizeof (pair)) ;
++    if (!findWindowPairFromLocal (window, &pair) || !pair) {
++        EPHYR_LOG_ERROR ("failed to find remote peer drawable\n") ;
++        return BadMatch ;
++    }
++
++    VERIFY_REGION(pRegion, stuff->region, client, DixReadAccess);
++    status = ephyrDRI2CopyRegion(stuff->drawable, pair, pRegion, stuff->dest, stuff->src);
++    if (status != Success)
++        return status;
++
++    /* CopyRegion needs to be a round trip to make sure the X server
++     * queues the swap buffer rendering commands before the DRI client
++     * continues rendering.  The reply has a bitmask to signal the
++     * presense of optional return values as well, but we're not using
++     * that yet.
++     */
++
++    rep.type = X_Reply;
++    rep.length = 0;
++    rep.sequenceNumber = client->sequence;
++
++    WriteToClient(client, sizeof(xDRI2CopyRegionReply), &rep);
++
++    return client->noClientException;
++}
++
++static int
++ProcDRI2Dispatch (ClientPtr client)
++{
++    REQUEST(xReq);
++
++    switch (stuff->data) {
++    case X_DRI2QueryVersion:
++        return ProcDRI2QueryVersion(client);
++    }
++
++    if (!LocalClient(client))
++        return BadRequest;
++
++    switch (stuff->data) {
++    case X_DRI2Connect:
++        return ProcDRI2Connect(client);
++    case X_DRI2Authenticate:
++        return ProcDRI2Authenticate(client);
++    case X_DRI2CreateDrawable:
++        return ProcDRI2CreateDrawable(client);
++    case X_DRI2DestroyDrawable:
++        return ProcDRI2DestroyDrawable(client);
++    case X_DRI2GetBuffers:
++        return ProcDRI2GetBuffers(client);
++    case X_DRI2CopyRegion:
++        return ProcDRI2CopyRegion(client);
++    case X_DRI2GetBuffersWithFormat:
++        return ProcDRI2GetBuffersWithFormat(client);
++    default:
++        {
++            fprintf(stderr, "Bad Request from client\n");
++            return BadRequest;
++        }
++    }
++}
++
++static int
++SProcDRI2Connect(ClientPtr client)
++{
++    REQUEST(xDRI2ConnectReq);
++    xDRI2ConnectReply rep;
++    int n;
++
++    /* If the client is swapped, it's not local.  Talk to the hand. */
++
++    swaps(&stuff->length, n);
++    if (sizeof(*stuff) / 4 != client->req_len)
++        return BadLength;
++
++    rep.sequenceNumber = client->sequence;
++    swaps(&rep.sequenceNumber, n);
++    rep.length = 0;
++    rep.driverNameLength = 0;
++    rep.deviceNameLength = 0;
++
++    return client->noClientException;
++}
++
++static int
++SProcDRI2Dispatch (ClientPtr client)
++{
++    REQUEST(xReq);
++
++    /*
++     * Only local clients are allowed DRI access, but remote clients
++     * still need these requests to find out cleanly.
++     */
++    switch (stuff->data)
++    {
++    case X_DRI2QueryVersion:
++        return ProcDRI2QueryVersion(client);
++    case X_DRI2Connect:
++        return SProcDRI2Connect(client);
++    default:
++        return BadRequest;
++    }
++}
+diff --git a/hw/kdrive/ephyr/ephyrdri2ext.h b/hw/kdrive/ephyr/ephyrdri2ext.h
+new file mode 100644
+index 0000000..b0b5ea9
+--- /dev/null
++++ b/hw/kdrive/ephyr/ephyrdri2ext.h
+@@ -0,0 +1,43 @@
++/*
++ * Xephyr - A kdrive X server thats runs in a host X window.
++ *          Authored by Matthew Allum <mallum@openedhand.com>
++ * 
++ * Copyright © 2007 OpenedHand Ltd 
++ *
++ * Permission to use, copy, modify, distribute, and sell this software and its
++ * documentation for any purpose is hereby granted without fee, provided that
++ * the above copyright notice appear in all copies and that both that
++ * copyright notice and this permission notice appear in supporting
++ * documentation, and that the name of OpenedHand Ltd not be used in
++ * advertising or publicity pertaining to distribution of the software without
++ * specific, written prior permission. OpenedHand Ltd makes no
++ * representations about the suitability of this software for any purpose.  It
++ * is provided "as is" without express or implied warranty.
++ *
++ * OpenedHand Ltd DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
++ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
++ * EVENT SHALL OpenedHand Ltd BE LIABLE FOR ANY SPECIAL, INDIRECT OR
++ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
++ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
++ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
++ * PERFORMANCE OF THIS SOFTWARE.
++ *
++ * Authors:
++ *    Haitao Feng <haitao.feng@intel.com>
++ */
++
++#ifndef __EPHYRDRI2EXT_H__
++#define __EPHYRDRI2EXT_H__
++
++#include "window.h"
++
++typedef struct {
++    WindowPtr local ;
++    int remote ;
++} EphyrDRI2WindowPair;
++
++Bool ephyrDRI2ExtensionInit (ScreenPtr a_screen) ;
++Bool findDRI2WindowPairFromRemote (int a_remote,
++        EphyrDRI2WindowPair **a_pair);
++
++#endif /*__EPHYRDRIEXT_H__*/
+diff --git a/hw/kdrive/ephyr/ephyrglxext.c b/hw/kdrive/ephyr/ephyrglxext.c
+index dfc43e1..69c4c57 100644
+--- a/hw/kdrive/ephyr/ephyrglxext.c
++++ b/hw/kdrive/ephyr/ephyrglxext.c
+@@ -451,7 +451,11 @@ ephyrGLXCreateContextReal (xGLXCreateContextReq *a_req, Bool a_do_swap)
+     EPHYR_LOG ("host window visual id: %d\n", host_w_attrs.visualid) ;
+ 
+     if (!ephyrHostGLXCreateContext (a_req->screen,
++#if DRI2
++                                    a_req->visual,
++#else
+                                     host_w_attrs.visualid,
++#endif
+                                     a_req->context,
+                                     a_req->shareList,
+                                     a_req->isDirect)) {
+diff --git a/hw/kdrive/ephyr/ephyrinit.c b/hw/kdrive/ephyr/ephyrinit.c
+index 27cab3b..19d18c1 100644
+--- a/hw/kdrive/ephyr/ephyrinit.c
++++ b/hw/kdrive/ephyr/ephyrinit.c
+@@ -36,6 +36,7 @@ extern Bool   kdHasKbd;
+ 
+ #ifdef GLXEXT
+ extern Bool   ephyrNoDRI;
++extern Bool   ephyrNoDRI2;
+ extern Bool noGlxVisualInit;
+ #endif
+ extern Bool   ephyrNoXV;
+@@ -120,6 +121,7 @@ ddxUseMsg (void)
+   ErrorF("-verbosity <level>   Set log verbosity level\n");
+ #ifdef GLXEXT
+   ErrorF("-nodri               do not use DRI\n");
++  ErrorF("-nodri2              do not use DRI2\n");
+ #endif
+   ErrorF("-noxv                do not use XV\n");
+   ErrorF("-name [name]         define the name in the WM_CLASS property\n");
+@@ -245,11 +247,16 @@ ddxProcessArgument (int argc, char **argv, int i)
+ #ifdef GLXEXT
+   else if (!strcmp (argv[i], "-nodri"))
+    {
+-       noGlxVisualInit = FALSE ;
+        ephyrNoDRI = TRUE ;
+        EPHYR_LOG ("no direct rendering enabled\n") ;
+        return 1 ;
+    }
++  else if (!strcmp (argv[i], "-nodri2"))
++   {
++       ephyrNoDRI2 = TRUE ;
++       EPHYR_LOG ("no direct rendering enabled\n") ;
++       return 1 ;
++   }
+ #endif
+   else if (!strcmp (argv[i], "-noxv"))
+    {
+@@ -358,13 +365,18 @@ ephyrDeviceCursorInitialize(DeviceIntPtr pDev, ScreenPtr pScreen)
+   return TRUE;
+ }
+ 
++static void
++ephyrDeviceCursorCleanup(DeviceIntPtr pDev, ScreenPtr pScreen)
++{
++}
++
+ miPointerSpriteFuncRec EphyrPointerSpriteFuncs = {
+ 	ephyrRealizeCursor,
+ 	ephyrUnrealizeCursor,
+ 	ephyrSetCursor,
+ 	ephyrMoveCursor,
+ 	ephyrDeviceCursorInitialize,
+-	NULL
++	ephyrDeviceCursorCleanup
+ };
+ 
+ 
+diff --git a/hw/kdrive/ephyr/hostx.c b/hw/kdrive/ephyr/hostx.c
+index 2ebeca9..79e407e 100644
+--- a/hw/kdrive/ephyr/hostx.c
++++ b/hw/kdrive/ephyr/hostx.c
+@@ -57,7 +57,7 @@
+ #include <X11/keysym.h>
+ #include <X11/extensions/XShm.h>
+ #include <X11/extensions/shape.h>
+-#ifdef XF86DRI
++#if defined(XF86DRI) || defined(DRI2)
+ #include <GL/glx.h>
+ #endif /* XF86DRI */
+ #include "ephyrlog.h"
+@@ -68,6 +68,12 @@ extern Bool XF86DRIQueryExtension (Display *dpy,
+                                    int *error_basep);
+ #endif
+ 
++#ifdef DRI2
++extern Bool DRI2QueryExtension (Display * display, 
++                                    int *eventBase, 
++                                    int *errorBase);
++#endif
++
+ /*  
+  * All xlib calls go here, which gets built as its own .a .
+  * Mixing kdrive and xlib headers causes all sorts of types
+@@ -1217,7 +1223,7 @@ hostx_create_window (int a_screen_number,
+         goto out ;
+     }
+     if (HostX.screens[a_screen_number].peer_win == None) {
+-	HostX.screens[a_screen_number].peer_win = win;
++        HostX.screens[a_screen_number].peer_win = win;
+     } else {
+         EPHYR_LOG_ERROR ("multiple peer windows created for same screen\n") ;
+     }
+@@ -1341,7 +1347,7 @@ hostx_has_xshape (void)
+     return TRUE;
+ }
+ 
+-#ifdef XF86DRI
++#if defined(XF86DRI) || defined(DRI2)
+ typedef struct {
+     int is_valid ;
+     int local_id ;
+@@ -1416,6 +1422,21 @@ hostx_get_resource_id_peer (int a_local_resource_id,
+ }
+ 
+ int
++hostx_has_glx (void)
++{
++    Display *dpy=hostx_get_display () ;
++    int event_base=0, error_base=0 ;
++
++    if (!glXQueryExtension (dpy, &event_base, &error_base)) {
++        return FALSE ;
++    }
++    return TRUE ;
++}
++
++#endif /* defined(XF86DRI) || defined(DRI2) */
++
++#ifdef XF86DRI
++int
+ hostx_has_dri (void)
+ {
+     int event_base=0, error_base=0 ;
+@@ -1431,17 +1452,24 @@ hostx_has_dri (void)
+     }
+     return TRUE ;
+ }
++#endif /* XF86DRI */
+ 
++#ifdef DRI2
+ int
+-hostx_has_glx (void)
++hostx_has_dri2 (void)
+ {
+-    Display *dpy=hostx_get_display () ;
+     int event_base=0, error_base=0 ;
++    Display *dpy=hostx_get_display () ;
+ 
+-    if (!glXQueryExtension (dpy, &event_base, &error_base)) {
++
++    if (!dpy)
++        return FALSE ;
++    if (!DRI2QueryExtension (dpy,
++                                &event_base,
++                                &error_base)) {
+         return FALSE ;
+     }
+     return TRUE ;
+ }
+ 
+-#endif /* XF86DRI */
++#endif /* DRI2 */
+diff --git a/hw/kdrive/ephyr/hostx.h b/hw/kdrive/ephyr/hostx.h
+index e65e0c9..6a59a53 100644
+--- a/hw/kdrive/ephyr/hostx.h
++++ b/hw/kdrive/ephyr/hostx.h
+@@ -247,7 +247,7 @@ int hostx_set_window_clipping_rectangles (int a_window,
+                                           int a_num_rects) ;
+ int hostx_has_xshape (void) ;
+ 
+-#ifdef XF86DRI
++#if defined(XF86DRI) || defined(DRI2)
+ int hostx_lookup_peer_window (void *a_local_window,
+                               int *a_host_peer /*out parameter*/) ;
+ int
+@@ -256,9 +256,15 @@ hostx_allocate_resource_id_peer (int a_local_resource_id,
+ int
+ hostx_get_resource_id_peer (int a_local_resource_id,
+                             int *a_remote_resource_id) ;
++int hostx_has_glx (void) ;
++#endif /* defined(XF86DRI) || defined(DRI2) */
++
++#if defined(XF86DRI)
+ int hostx_has_dri (void) ;
++#endif
+ 
+-int hostx_has_glx (void) ;
+-#endif /* XF86DRI */
++#if defined(DRI2)
++int hostx_has_dri2 (void) ;
++#endif
+ 
+ #endif /*_XLIBS_STUFF_H_*/
+-- 
+1.6.1.3
+
