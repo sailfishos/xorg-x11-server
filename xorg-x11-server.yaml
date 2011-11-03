@@ -125,6 +125,8 @@ SubPackages:
           provides the basic low level functionality which full fledged
           graphical user interfaces (GUIs) such as GNOME and KDE are designed
           upon.
+      Conflicts:
+          - "%{name}-Xorg-setuid"
       Requires:
           - xorg-x11-drv-mouse
           - xorg-x11-drv-keyboard
