@@ -1,12 +1,12 @@
 Name: xorg-x11-server
 Summary: X.Org X11 X server
-Version: 1.10.1
+Version: 1.10.6
 Release: 1
 Group: System/X11
 License: MIT
 URL: http://www.x.org
 Sources:
-    - xorg-server-%{version}.tar.bz2
+    - http://xorg.freedesktop.org/archive/individual/xserver/xorg-server-%{version}.tar.bz2
 Patches:
     - xorg-x11-nonroot-vesa.patch
     - xorg-detect-psb.patch
@@ -165,4 +165,3 @@ SubPackages:
           Xnest, Xephyr renders to an X image rather than relaying the
           X protocol, and therefore supports the newer X extensions like
           Render and Composite.
-

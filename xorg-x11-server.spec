@@ -7,12 +7,12 @@
 
 Name:       xorg-x11-server
 Summary:    X.Org X11 X server
-Version:    1.10.1
+Version:    1.10.6
 Release:    1
 Group:      System/X11
 License:    MIT
 URL:        http://www.x.org
-Source0:    xorg-server-%{version}.tar.bz2
+Source0:    http://xorg.freedesktop.org/archive/individual/xserver/xorg-server-%{version}.tar.bz2
 Source1:    00-input-default.conf
 Source2:    10-input-synaptics.conf
 Source3:    11-input-joystick.conf
