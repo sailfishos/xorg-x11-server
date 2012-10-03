@@ -1,73 +1,59 @@
 Name: xorg-x11-server
 Summary: X.Org X11 X server
-Version: 1.10.6
+Version: 1.13.0
 Release: 1
 Group: System/X11
 License: MIT
 URL: http://cgit.freedesktop.org/xorg/xserver
 Sources:
     - http://xorg.freedesktop.org/archive/individual/xserver/xorg-server-%{version}.tar.bz2
-Patches:
-    - xorg-x11-nonroot-vesa.patch
-    - xorg-detect-psb.patch
-    - use-sloppy-heuristic-first-for-initial-mode.patch
-    - do-not-zap-xserver.patch
-    - Lower-server-side-GLX-version.patch
-    - reuse-buffer-notify.patch
-    - Suppress-exposures-and-implicit-painting-for-some-re.patch
-
 Requires:
     - libdrm >= 2.4.0
-PkgBR:
-    - byacc
-    - flex
 PkgConfigBR:
-    - xorg-macros
-    - scrnsaverproto
-    - xtrans
-    - libdrm
-    - randrproto
-    - renderproto
-    - kbproto
-    - glproto
-    - fixesproto
-    - dri2proto
-    - damageproto
-    - xf86driproto
-    - xcmiscproto
-    - bigreqsproto
-    - compositeproto
-    - resourceproto
-    - evieproto
-    - xf86dgaproto
-    - xf86vidmodeproto
-    - recordproto
-    - xkbfile
-    - xres
-    - xau
-    - xext
-    - xfont
-    - fontenc
-    - xdmcp
-    - xt
-    - dmx
-    - xmuu
-    - xrender
-    - xi
-    - xpm
-    - xaw7
-    - xfixes
-    - xv
-    - pixman-1
-    - gl
-    - dri
-    - x11
+    - xorg-macros >= 1.14
+    - fontutil >= 1.1
+    - videoproto
+    - compositeproto >= 0.4
+    - recordproto >= 1.13.99.1
+    - scrnsaverproto >= 1.1
+    - resourceproto >= 1.2.0
+    - xf86driproto >= 2.1.0
+    - dri2proto >= 2.8
+    - xineramaproto
+    - xf86bigfontproto >= 1.2.0
+    - xf86dgaproto >= 2.0.99.1
+    - dmxproto >= 2.2.99.1
+    - xf86vidmodeproto >= 2.2.99.1
+    - xproto >= 7.0.22
+    - randrproto >= 1.4.0
+    - renderproto >= 0.11
+    - xextproto >= 7.1.99
+    - inputproto >= 2.1.99.6
+    - kbproto >= 1.0.3
+    - fontsproto
+    - fixesproto >= 5.0
+    - damageproto >= 1.1
+    - xcmiscproto >= 1.2.0
+    - bigreqsproto >= 1.1.0
+    - xtrans >= 1.2.2
+    - dmx >= 1.0.99.1
+    - dri >= 7.8.0
+    - libdrm >= 2.3.0
+    - gl >= 7.1.0
+    - xext >= 1.0.99.4
+    - xfont >= 1.4.2
+    - xi >= 1.2.99.1
+    - xtst >= 1.0.99.2
+    - pciaccess >= 0.12.901
+    - libudev >= 143
+    - dbus-1 >= 1.0
+    - pixman-1 >= 0.21.8
     - openssl
-    - pciaccess
-    - libudev
-    - dbus-1
-    - fontutil
-    - xcomposite
+    - xkbfile
+    - glproto >= 1.4.16
+    - xdmcp
+    - xv
+
 Configure: reconfigure
 ConfigOptions:
     - --enable-maintainer-mode
@@ -76,8 +62,9 @@ ConfigOptions:
     - --disable-xvfb
     - --disable-xnest
     - --disable-dmx
+    - --enable-glx
     - --enable-kdrive
-    - --enable-xephyr
+    - --disable-xephyr
     - --disable-xfake
     - --disable-xfbdev
     - --enable-xorg
@@ -90,13 +77,10 @@ ConfigOptions:
     - --disable-xinerama
     - --enable-dri2
     - --enable-dri
-    - --with-dri-driver-path=%{_libdir}/dri
-ExtraSources:
-    - 00-input-default.conf;/etc/X11/xorg.conf.d
-    - 10-input-synaptics.conf;/etc/X11/xorg.conf.d
-    - 11-input-joystick.conf;/etc/X11/xorg.conf.d
+
 Description: |
     Description: %{summary}
+
 SubPackages:
     - Name: devel
       Summary: SDK for X server driver module development
@@ -108,9 +92,14 @@ SubPackages:
           drivers, input drivers, or other X modules should install this package.
       Requires:
           - xorg-x11-util-macros
-          - pkgconfig
           - pixman-devel
           - libpciaccess-devel
+          - xorg-x11-proto-resourceproto
+          - xorg-x11-proto-scrnsaverproto
+          - xorg-x11-proto-xextproto
+          - xorg-x11-proto-xf86bigfontproto
+          - xorg-x11-proto-kbproto
+          - xorg-x11-proto-videoproto
 
     - Name: common
       Summary: Xorg server common files
@@ -153,15 +142,3 @@ SubPackages:
       Provides:
           - xorg-x11-server-Xorg = %{version}
 
-    - Name: Xephyr
-      Summary: A nested X server.
-      Group: System/X11
-      Description: |
-          Xephyr is an X server, which has been implemented as an ordinary
-          X application.  It runs in a window just like other X applications,
-          but it is an X server itself in which you can run other software.  It
-          is a very useful tool for developers who wish to test their
-          applications without running them on their real X server.  Unlike
-          Xnest, Xephyr renders to an X image rather than relaying the
-          X protocol, and therefore supports the newer X extensions like
-          Render and Composite.

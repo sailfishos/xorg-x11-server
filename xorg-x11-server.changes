@@ -1,5 +1,26 @@
+* Tue Sep 11 2012 Marko Saukko <marko.saukko@jollamobile.com> - 1.13.0
+- Update to version 1.13.0
+- Drop default configurations as every adaptation should have their own
+  configs and we should not provide any by default:
+  00-input-default.conf, 10-input-synaptics.conf and 11-input-joystick.conf
+- Drop: make-snapshot.sh, xorg-x11-server-source.desc and xorg-x11-server.desc 
+- Dropped xephyr and patches:
+  0001-Enable-DRI2-extension-for-Xephyr.patch, 
+  0002-Enable-off-screen-rendering-feature-for-Xephyr.patch,
+  0003-Enable-notfp-feature-for-Xephyr.patch
+- Dropped also rest of the old patches. We can rebase these later if there is need:
+  do-not-zap-xserver.patch
+  reuse-buffer-notify.patch
+  use-sloppy-heuristic-first-for-initial-mode.patch
+  Lower-server-side-GLX-version.patch
+  xorg-detect-psb.patch
+  Suppress-exposures-and-implicit-painting-for-some-re.patch
+  xorg-x11-nonroot-vesa.patch
+  cache-xkbcomp-output-for-fast-start-up.patch
+  xserver-boottime.patch
+
 * Sun Jul 08 2012 Javier Jardón <jjardon@gnome.org> - 1.10.6
-- Fixes MER#375 : xorg-x11-server has obsolete URL tag
+- Fixes MER#375: xorg-x11-server has obsolete URL tag
 
 * Mon Mar 19 2012 Marko Saukko <marko.saukko@gmail.com> - 1.10.6
 - Update to version 1.10.6
