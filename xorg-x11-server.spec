@@ -178,6 +178,7 @@ rm -rf %{buildroot}
 %make_install
 
 # >> install post
+mkdir -p %{buildroot}/%{_sysconfdir}/X11/xorg.conf.d/
 # << install post
 
 
@@ -194,7 +195,6 @@ rm -rf %{buildroot}
 %dir %{_includedir}/xorg
 %{_includedir}/xorg/*.h
 %{_datadir}/aclocal/xorg-server.m4
-%{_datadir}/X11/xorg.conf.d/10-evdev.conf
 # << files devel
 
 %files common
@@ -242,6 +242,9 @@ rm -rf %{buildroot}
 %doc %{_mandir}/man4/exa.4*
 %doc %{_mandir}/man5/xorg.conf.5*
 %doc %{_mandir}/man5/xorg.conf.d.5*
+%dir %{_sysconfdir}/X11/xorg.conf.d
+%dir %{_datadir}/X11/xorg.conf.d
+%{_datadir}/X11/xorg.conf.d/10-evdev.conf
 # << files Xorg
 
 %files Xorg-setuid
@@ -279,4 +282,7 @@ rm -rf %{buildroot}
 %doc %{_mandir}/man4/exa.4*
 %doc %{_mandir}/man5/xorg.conf.5*
 %doc %{_mandir}/man5/xorg.conf.d.5*
+%dir %{_sysconfdir}/X11/xorg.conf.d
+%dir %{_datadir}/X11/xorg.conf.d
+%{_datadir}/X11/xorg.conf.d/10-evdev.conf
 # << files Xorg-setuid

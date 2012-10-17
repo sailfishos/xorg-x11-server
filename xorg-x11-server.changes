@@ -1,3 +1,7 @@
+* Wed Oct 17 2012 Marko Saukko <marko.saukko@jollamobile.com> - 1.13.0
+- Add /etc/X11/xorg.conf.d/ dir to packages
+- Move 10-evdev.conf to real package from -devel
+
 * Tue Sep 11 2012 Marko Saukko <marko.saukko@jollamobile.com> - 1.13.0
 - Update to version 1.13.0
 - Drop default configurations as every adaptation should have their own
