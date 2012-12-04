@@ -1,3 +1,7 @@
+* Tue Dec 04 2012 Pekka Lundstrom <pekka.lundsrom@jollamobile.com> - 1.13.0
+- Added patch cache-xkbcomp-output-for-fast-start-up.patch. 
+  Fixes: NEMO#505
+
 * Wed Oct 17 2012 Marko Saukko <marko.saukko@jollamobile.com> - 1.13.0
 - Add /etc/X11/xorg.conf.d/ dir to packages
 - Move 10-evdev.conf to real package from -devel

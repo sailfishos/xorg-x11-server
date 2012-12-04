@@ -16,6 +16,7 @@ License:    MIT
 URL:        http://cgit.freedesktop.org/xorg/xserver
 Source0:    http://xorg.freedesktop.org/archive/individual/xserver/xorg-server-%{version}.tar.bz2
 Source100:  xorg-x11-server.yaml
+Patch0:     cache-xkbcomp-output-for-fast-start-up.patch
 Requires:   libdrm >= 2.4.0
 BuildRequires:  pkgconfig(xorg-macros) >= 1.14
 BuildRequires:  pkgconfig(fontutil) >= 1.1
@@ -136,6 +137,8 @@ upon.
 %prep
 %setup -q -n xorg-server-%{version}
 
+# cache-xkbcomp-output-for-fast-start-up.patch
+%patch0 -p1
 # >> setup
 # << setup
 
